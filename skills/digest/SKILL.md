@@ -147,13 +147,30 @@ When the inventoried scope is authored:
 - **`index.md`** — the work's map in reading order: the source's own
   chapter structure as headings, an ordered wikilink per tree with a
   one-line gloss. Every deliberate skip stays visible in the inventory,
-  so index absence means "skipped", never "forgot".
-- **`views/dag.md`** — one mermaid fence over the `depends` edges,
-  statement and prose trees only, `prf-` omitted; mermaid node ids use
-  underscores with the tree id as the bracket label
-  (`def_coset["def-coset"]`), arrows from prerequisite to dependent.
-- **`views/by-concept.md`** — one heading per concept id appearing in
-  any `teaches`, that concept's trees as wikilinks with taxa.
+  so index absence means "skipped", never "forgot". Write it **before**
+  generating views: its sections are the groups the views are built
+  around.
+- **Generate the views** — run exactly:
+
+  ```
+  node "${CLAUDE_PLUGIN_ROOT}/scripts/build-views.mjs" <vault-dir>
+  ```
+
+  It regenerates `views/forest.html` (self-contained interactive DAG),
+  `views/dag.md` (group overview + one small mermaid diagram per
+  index.md section) and `views/by-concept.md` from the trees. Never
+  hand-edit these files — rerun the builder after any tree change.
+
+  *Fallback, only when no `node` is available:* hand-author the two
+  markdown views per the format doc — `views/dag.md` as a group
+  overview plus small per-section fences over the transitively reduced
+  `depends` edges, statement and prose trees only, `prf-`/`exr-`
+  omitted; mermaid node ids use underscores with the tree id as the
+  bracket label (`def_coset["def-coset"]`), arrows from prerequisite to
+  dependent; `views/by-concept.md` as one heading per concept id
+  appearing in any `teaches`, that concept's trees as wikilinks with
+  taxa. Skip `forest.html` — it is generated or absent, never
+  hand-written.
 - **Sweep for scrollback** in every `standalone: true` body — the
   validator flags the common phrases, but read for the ones it can't.
 
@@ -186,7 +203,9 @@ what the comparison showed — including "clean".
 
 Point the member at Obsidian: *Open folder as vault* on the vault
 folder, start at `index.md` (the map), `views/dag.md` for the graph —
-wikilinks, mermaid and `$…$` math render with no plugins. Remind them,
+wikilinks, mermaid and `$…$` math render with no plugins. For the whole
+work at a glance, `views/forest.html` opens in any browser, offline —
+groups expand on click, proofs and exercises toggle on demand. Remind them,
 once more and in one sentence, whether this vault may leave their
 machine.
 

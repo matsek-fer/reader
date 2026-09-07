@@ -4,11 +4,15 @@
   "private": true,
   "description": "MatSek Knowledge Forest — vault tooling (slice 1: format + validator)",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "katex": "^0.18.7",
+    "marked": "^18.0.11"
   }
 }

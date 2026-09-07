@@ -23,7 +23,7 @@ uče nove koncepte pa stoje uz svoje teoreme.
 
 ## lagrange
 
-- [[thm-lagrange]] (theorem) — dokazi: [[prf-lagrange-particija]], [[prf-lagrange-djelovanje]]
+- [[thm-lagrange]] (theorem) — dokazi: [[prf-lagrange-djelovanje]], [[prf-lagrange-particija]]
 - [[cor-red-elementa]] (corollary)
 - [[con-slobodna-djelovanja]] (connection)
 

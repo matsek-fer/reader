@@ -260,16 +260,41 @@ Views are **derived** files — regenerable from the trees, committed anyway
 so the vault renders without tooling. A tool that edits trees regenerates
 the views before it is done.
 
-- **`views/dag.md`** — a ` ```mermaid ` fence drawing the `depends` graph.
-  **Statement and prose trees only: `prf-` trees are omitted**, along with
-  their edges, for legibility — a book's DAG doubles in size and halves in
-  meaning when every proof shadows its statement. Node labels are tree ids;
-  edges point from prerequisite to dependent (an arrow `def-coset -->
-  thm-lagrange` reads "coset feeds Lagrange").
+The reference generator is `scripts/build-views.mjs <vault-dir>`; it
+rewrites all three views from the trees, deterministically (the only date
+in its output is `forest.json`'s `created`).
+
+- **`views/dag.md`** — mermaid fences over the **transitively reduced**
+  `depends` graph (an edge implied by a longer path is dropped): first
+  ONE small overview diagram of the `index.md` sections as group nodes
+  with aggregated, deduplicated edges between them, then one small
+  top-down diagram per section (≤ ~15 nodes each; a larger section is
+  chunked) showing **statement and prose trees only — `prf-` and `exr-`
+  trees are omitted**, along with their edges, for legibility — a book's
+  DAG doubles in size and halves in meaning when every proof shadows its
+  statement. Under each diagram, the trees it shows as wikilinks. Never
+  a single whole-vault graph: one giant diagram is exactly the tangle
+  this shape replaced. Node labels are tree ids; edges point from
+  prerequisite to dependent (an arrow `def-coset --> thm-lagrange` reads
+  "coset feeds Lagrange").
 - **`views/by-concept.md`** — the vault inverted through the registry: one
   heading per concept id appearing in any tree's `teaches`, listing that
   concept's trees as wikilinks with their taxa. The view a tutor uses to
   answer "what does this vault hold about `cosets`?".
+- **`views/forest.html`** — *generated, optional but recommended*: a
+  self-contained interactive rendering of the whole vault (opens from
+  `file://`, no network, math pre-rendered with KaTeX and its fonts
+  inlined). Layout is computed at generation time — transitive reduction,
+  longest-path layering, barycenter crossing-reduction, fixed x/y
+  coordinates — never by a client library. The `index.md` sections are
+  collapsible groups (collapsed: one box with title, tree count and
+  aggregated edges; expanded: the trees laid out inside); proofs fold
+  under their statements behind a "Prikaži dokaze" toggle, exercises
+  behind "Prikaži zadatke" (off by default when the vault has more than
+  8); clicking a tree opens its full content in a side panel with an
+  `obsidian://` link. The validator treats `forest.html` as optional —
+  old vaults without it remain valid — but when the file exists it must
+  be non-empty.
 
 ## Copyright — the hard rules
 
