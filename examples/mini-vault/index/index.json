@@ -1,0 +1,206 @@
+{
+  "schema_version": "forest-index-0.1",
+  "model": "Xenova/multilingual-e5-small",
+  "dims": 384,
+  "quantization": "int8-per-item-scale",
+  "items": [
+    {
+      "id": "con-slobodna-djelovanja",
+      "taxon": "connection",
+      "title": "Lagrange kao specijalan slučaj slobodnih djelovanja",
+      "teaches": [
+        "lagrange",
+        "orbits-stabilizers"
+      ],
+      "requires": [],
+      "depends": [
+        "thm-lagrange",
+        "exp-orbite-i-stabilizatori"
+      ],
+      "group": "4 · Primjer i veza",
+      "standalone": true,
+      "offset": 0,
+      "scale": 0.0011547187
+    },
+    {
+      "id": "cor-red-elementa",
+      "taxon": "corollary",
+      "title": "Red elementa dijeli red grupe",
+      "teaches": [
+        "lagrange"
+      ],
+      "requires": [],
+      "depends": [
+        "thm-lagrange",
+        "def-subgroup"
+      ],
+      "group": "2 · Teorem i dokazi",
+      "standalone": true,
+      "offset": 384,
+      "scale": 0.00097692775
+    },
+    {
+      "id": "def-coset",
+      "taxon": "definition",
+      "title": "Koset",
+      "teaches": [
+        "cosets"
+      ],
+      "requires": [],
+      "depends": [
+        "def-subgroup"
+      ],
+      "group": "1 · Temelji",
+      "standalone": true,
+      "offset": 768,
+      "scale": 0.00097817007
+    },
+    {
+      "id": "def-group",
+      "taxon": "definition",
+      "title": "Grupa",
+      "teaches": [
+        "groups"
+      ],
+      "requires": [
+        "sets",
+        "functions"
+      ],
+      "depends": [],
+      "group": "1 · Temelji",
+      "standalone": true,
+      "offset": 1152,
+      "scale": 0.0010524527
+    },
+    {
+      "id": "def-group-action",
+      "taxon": "definition",
+      "title": "Djelovanje grupe",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [],
+      "depends": [
+        "def-group"
+      ],
+      "group": "3 · Djelovanja: drugi motor",
+      "standalone": true,
+      "offset": 1536,
+      "scale": 0.00089876377
+    },
+    {
+      "id": "def-index",
+      "taxon": "definition",
+      "title": "Indeks podgrupe",
+      "teaches": [
+        "index"
+      ],
+      "requires": [],
+      "depends": [
+        "def-coset"
+      ],
+      "group": "1 · Temelji",
+      "standalone": true,
+      "offset": 1920,
+      "scale": 0.0010076583
+    },
+    {
+      "id": "def-subgroup",
+      "taxon": "definition",
+      "title": "Podgrupa",
+      "teaches": [
+        "subgroups"
+      ],
+      "requires": [],
+      "depends": [
+        "def-group"
+      ],
+      "group": "1 · Temelji",
+      "standalone": true,
+      "offset": 2304,
+      "scale": 0.00099860179
+    },
+    {
+      "id": "exm-koseti-u-z6",
+      "taxon": "example",
+      "title": "Koseti podgrupe {0, 3} u Z₆",
+      "teaches": [
+        "cosets"
+      ],
+      "requires": [
+        "modular-arithmetic"
+      ],
+      "depends": [
+        "def-coset"
+      ],
+      "group": "4 · Primjer i veza",
+      "standalone": true,
+      "offset": 2688,
+      "scale": 0.00090415013
+    },
+    {
+      "id": "exp-orbite-i-stabilizatori",
+      "taxon": "exposition",
+      "title": "Orbite: kako djelovanje particionira skup",
+      "teaches": [
+        "orbits-stabilizers"
+      ],
+      "requires": [],
+      "depends": [
+        "def-group-action"
+      ],
+      "group": "3 · Djelovanja: drugi motor",
+      "standalone": true,
+      "offset": 3072,
+      "scale": 0.00096252197
+    },
+    {
+      "id": "prf-lagrange-djelovanje",
+      "taxon": "proof",
+      "title": "Dokaz Lagrangeova teorema slobodnim djelovanjem",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "thm-lagrange",
+        "def-group-action",
+        "exp-orbite-i-stabilizatori"
+      ],
+      "group": "2 · Teorem i dokazi",
+      "standalone": true,
+      "offset": 3456,
+      "scale": 0.0010252977
+    },
+    {
+      "id": "prf-lagrange-particija",
+      "taxon": "proof",
+      "title": "Dokaz Lagrangeova teorema particijom na kosete",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "thm-lagrange",
+        "def-coset"
+      ],
+      "group": "2 · Teorem i dokazi",
+      "standalone": true,
+      "offset": 3840,
+      "scale": 0.0010188112
+    },
+    {
+      "id": "thm-lagrange",
+      "taxon": "theorem",
+      "title": "Lagrangeov teorem",
+      "teaches": [
+        "lagrange"
+      ],
+      "requires": [],
+      "depends": [
+        "def-coset",
+        "def-index"
+      ],
+      "group": "2 · Teorem i dokazi",
+      "standalone": true,
+      "offset": 4224,
+      "scale": 0.001023773
+    }
+  ]
+}

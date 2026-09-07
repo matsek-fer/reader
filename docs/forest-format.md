@@ -286,15 +286,23 @@ in its output is `forest.json`'s `created`).
   `file://`, no network, math pre-rendered with KaTeX and its fonts
   inlined). Layout is computed at generation time — transitive reduction,
   longest-path layering, barycenter crossing-reduction, fixed x/y
-  coordinates — never by a client library. The `index.md` sections are
-  collapsible groups (collapsed: one box with title, tree count and
-  aggregated edges; expanded: the trees laid out inside); proofs fold
-  under their statements behind a "Prikaži dokaze" toggle, exercises
-  behind "Prikaži zadatke" (off by default when the vault has more than
-  8); clicking a tree opens its full content in a side panel with an
-  `obsidian://` link. The validator treats `forest.html` as optional —
-  old vaults without it remain valid — but when the file exists it must
-  be non-empty.
+  coordinates — never by a client library. The page draws no dependency
+  arrows; the `depends` DAG surfaces instead as **reading states**. Every
+  tree wears one of three outlines: *savladano* (the reader marked it
+  understood, from the side panel), *spremno* (every id in its full,
+  unreduced `depends` list is savladano — vacuously true for roots) and
+  *nije spremno* (otherwise). Marks live only in the browser's
+  `localStorage`, keyed by the vault's `source.title` + `created`, so the
+  generated file itself stays deterministic; a footer control resets
+  progress, and marking a merely-ready tree first offers a `/tutor`
+  self-check. The `index.md` sections are collapsible groups (collapsed:
+  one bar with title and "N/M savladano" progress wearing the same three
+  outlines; expanded: the trees laid out inside); proofs fold under their
+  statements behind a "Prikaži dokaze" toggle, exercises behind "Prikaži
+  zadatke" (off by default when the vault has more than 8); clicking a
+  tree opens its full content in a side panel with an `obsidian://` link.
+  The validator treats `forest.html` as optional — old vaults without it
+  remain valid — but when the file exists it must be non-empty.
 
 ## Copyright — the hard rules
 
@@ -326,6 +334,20 @@ common case — a member digesting the textbook they are actually studying —
 produces a vault that is legally *theirs to use and nobody's to
 redistribute*, and the format makes that boundary machine-visible
 (`derivative`, `notice`) instead of relying on memory.
+
+## The retrieval index: `index/`
+
+`scripts/index-vault.mjs` derives `index/index.json` (schema
+`forest-index-0.1`: model, dims 384, quantization, one item per tree) and
+`index/vectors.i8.bin` (int8, per-item scale) under the ecosystem's D-003
+embedding convention, so vault vectors and library vectors are mutually
+comparable. Like `views/`, it is a derived artifact: optional, never
+required by the validator, rebuilt whenever trees change. Committing it
+is a per-vault choice — the repo's example vault commits its ~5 KB index
+so it works out of the box; personal vaults typically regenerate.
+`scripts/search-vault.mjs` fuses lexical and cosine signals over it and
+degrades to lexical-only without the model (the first hybrid run
+downloads ~130 MB, once).
 
 ## Relationship to bundle spec v1
 

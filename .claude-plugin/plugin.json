@@ -6,5 +6,8 @@
     "name": "Matematička sekcija FER",
     "url": "https://github.com/matsek-fer"
   },
-  "skills": ["./skills/digest"]
+  "skills": [
+    "./skills/digest",
+    "./skills/ask"
+  ]
 }

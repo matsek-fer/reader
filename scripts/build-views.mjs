@@ -4,19 +4,24 @@
 // Usage: node scripts/build-views.mjs <vault-dir>
 //
 // Writes three files:
-//   views/forest.html   self-contained interactive DAG (works from file://,
-//                       no network): groups from index.md sections collapse
-//                       and expand, proofs fold under their statements,
-//                       exercises toggle globally, and clicking a node opens
-//                       the tree's full content with math pre-rendered.
+//   views/forest.html   self-contained interactive reading map (works from
+//                       file://, no network): groups from index.md sections
+//                       collapse and expand, proofs fold under their
+//                       statements, exercises toggle globally, clicking a
+//                       node opens the tree's full content with math
+//                       pre-rendered, and every node wears one of three
+//                       reading states (savladano / spremno / nije spremno)
+//                       computed at runtime from the full depends lists and
+//                       the reader's own marks (localStorage).
 //   views/dag.md        mermaid fallback for Obsidian — one group overview
 //                       plus one small per-section diagram, never one giant
 //                       tangled graph.
 //   views/by-concept.md the vault inverted through `teaches`.
 //
 // All layout is computed HERE, at build time: transitive reduction of the
-// depends DAG first (an edge implied by a longer path teaches nothing and
-// only adds ink), then longest-path layering, then four barycenter ordering
+// depends DAG first (used for layering only — the page draws no arrows;
+// the DAG lives on as readiness logic over the FULL, unreduced depends
+// lists), then longest-path layering, then four barycenter ordering
 // passes, then x/y coordinates per group and per toggle state. The page's
 // JavaScript only applies precomputed coordinates and stacks the group
 // bands; it never lays anything out.
@@ -502,8 +507,13 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
 
   const nodeInfo = {};
   const contentHtml = {};
+  // Full per-tree depends (NOT the transitively-reduced set). Readiness
+  // means "every real prerequisite is savladano", and the reader may mark
+  // out of order — so an edge implied by a longer path still gates.
+  const depsOf = {};
   for (const id of ids) {
     const t = trees.get(id);
+    depsOf[id] = (t.fm.depends ?? []).filter((d) => trees.has(d)).sort();
     nodeInfo[id] = {
       taxon: t.fm.taxon,
       title: plainTitle(t.fm.title),
@@ -583,6 +593,13 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
     )
     .join("");
 
+  // Reading-state legend — the three outlines every node can wear.
+  const stateLegend =
+    `<span class="lg"><i class="lgs lgs-done"></i>savladano</span>` +
+    `<span class="lg"><i class="lgs lgs-ready"></i>spremno za čitanje</span>` +
+    `<span class="lg"><i class="lgs lgs-not"></i>nije spremno</span>` +
+    `<span class="lgsep"></span>`;
+
   const data = {
     groups: groupData.map(({ id, title, members, variants }) => ({
       id,
@@ -591,11 +608,18 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
       variants,
     })),
     nodes: nodeInfo,
-    edges,
+    deps: depsOf,
     proofsOf: proofsOfObj,
     geom: { NODE_W, NODE_H, PRF_W, PRF_H, HEADER_H, PAD, COLLAPSED_W },
     showExrDefault,
     exrCount,
+    // Progress is runtime-only; the key ties it to this digest so two
+    // vaults opened on the same machine never share marks.
+    progressKey:
+      "forest-progress:" +
+      (forest.source?.title ?? "") +
+      "|" +
+      (forest.created ?? ""),
   };
   const dataJson = JSON.stringify(data).replace(/</g, "\\u003c");
   const contentJson = JSON.stringify(contentHtml).replace(/</g, "\\u003c");
@@ -615,6 +639,7 @@ ${katexCss()}
 :root {
   --bg: #14161a; --panel: #1a1d23; --card: #21252d; --card-hi: #2a2f3a;
   --border: #343a46; --fg: #e4e6ea; --fg-muted: #9aa1ad; --accent: #5b9dd9;
+  --st-done: #6fbf73; --st-ready: #6fb1e8;
 }
 * { box-sizing: border-box; margin: 0; }
 html, body { height: 100%; }
@@ -629,6 +654,11 @@ body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-s
 #legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 12px; color: var(--fg-muted); }
 #legend .lg { display: inline-flex; align-items: center; gap: 4px; }
 #legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#legend .lgs { background: var(--card); border: 2px solid var(--border); }
+#legend .lgs-done { border-color: var(--st-done); background: color-mix(in srgb, var(--st-done) 12%, var(--card)); }
+#legend .lgs-ready { border-color: var(--st-ready); background: color-mix(in srgb, var(--st-ready) 8%, var(--card)); }
+#legend .lgs-not { opacity: 0.55; }
+#legend .lgsep { width: 1px; align-self: stretch; background: var(--border); }
 #canvas { position: absolute; inset: 0; cursor: grab; }
 #canvas.panning { cursor: grabbing; }
 svg { width: 100%; height: 100%; display: block; }
@@ -644,13 +674,18 @@ svg { width: 100%; height: 100%; display: block; }
 .node .ntitle { fill: var(--fg); font-size: 11px; pointer-events: none; }
 .node .nid { fill: var(--fg-muted); font-size: 10px; font-family: ui-monospace, monospace; pointer-events: none; }
 .node .prfbadge { fill: var(--fg-muted); font-size: 10px; }
-.node.hit rect:first-of-type { stroke: var(--accent); stroke-width: 2; }
-.node.dim, .edge.dim { opacity: 0.18; }
+.node.st-done rect:first-of-type { stroke: var(--st-done); stroke-width: 1.6; fill: color-mix(in srgb, var(--st-done) 10%, var(--card)); }
+.node.st-done:hover rect:first-of-type { fill: color-mix(in srgb, var(--st-done) 18%, var(--card)); }
+.node.st-ready rect:first-of-type { stroke: var(--st-ready); stroke-width: 1.6; fill: color-mix(in srgb, var(--st-ready) 8%, var(--card)); }
+.node.st-ready:hover rect:first-of-type { fill: color-mix(in srgb, var(--st-ready) 16%, var(--card)); }
+.node.st-not { opacity: 0.55; }
+.group.g-done .grp-box { stroke: var(--st-done); stroke-width: 1.6; }
+.group.g-ready .grp-box { stroke: var(--st-ready); stroke-width: 1.6; }
+.group.g-muted { opacity: 0.65; }
+/* Search hit is white so it never reads as a state colour. */
+.node.hit rect:first-of-type { stroke: var(--fg); stroke-width: 2; }
+.node.dim { opacity: 0.18; }
 .node.sel rect:first-of-type { stroke: #e0a458; stroke-width: 2; }
-.edge { fill: none; stroke: #566072; stroke-width: 1.3; opacity: 0.85; }
-.edge.agg { stroke: #6b7688; }
-.edge-count { fill: var(--fg-muted); font-size: 10px; }
-#arrow path { fill: #566072; }
 #panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 90vw); background: var(--panel); border-left: 1px solid var(--border); padding: 18px 20px; overflow-y: auto; z-index: 20; transform: translateX(105%); transition: transform 0.15s ease; }
 #panel.open { transform: none; }
 #panel .panel-head h2 { font-size: 17px; margin: 6px 0 2px; }
@@ -662,7 +697,23 @@ svg { width: 100%; height: 100%; display: block; }
 #panel .katex-display { overflow-x: auto; padding: 2px 0; }
 #close { position: absolute; top: 10px; right: 12px; background: none; border: none; color: var(--fg-muted); font-size: 20px; cursor: pointer; }
 #close:hover { color: var(--fg); }
-#footer { position: fixed; left: 12px; bottom: 8px; color: var(--fg-muted); font-size: 11px; z-index: 5; pointer-events: none; }
+#footer { position: fixed; left: 12px; bottom: 8px; color: var(--fg-muted); font-size: 11px; z-index: 5; display: flex; gap: 10px; align-items: center; }
+#footer button { background: none; border: none; color: var(--fg-muted); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; }
+#footer button:hover { color: var(--fg); }
+#storage-note { color: #e0a458; }
+#panel-mark { margin: 12px 0 14px; }
+.mark-btn { background: var(--card); color: var(--fg); border: 1px solid var(--st-ready); border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+.mark-btn:hover { background: var(--card-hi); }
+.mark-btn.is-done { border-color: var(--border); color: var(--fg-muted); }
+.mark-state { font-size: 12px; color: var(--fg-muted); margin-bottom: 6px; }
+.mark-hint { margin-top: 8px; font-size: 12px; color: #e0a458; }
+.mark-prompt { margin-top: 10px; position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 32px 10px 12px; font-size: 13px; }
+.mark-prompt code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.mark-prompt .mp-close { position: absolute; top: 4px; right: 6px; background: none; border: none; color: var(--fg-muted); font-size: 15px; cursor: pointer; }
+.mark-prompt .mp-close:hover { color: var(--fg); }
+.mp-actions { margin-top: 8px; display: flex; gap: 8px; }
+.mp-actions button { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.mp-actions button:hover { background: var(--card-hi); }
 </style>
 </head>
 <body>
@@ -674,16 +725,15 @@ svg { width: 100%; height: 100%; display: block; }
   <label${exrCount ? "" : ' style="display:none"'}><input type="checkbox" id="tglExr"${showExrDefault ? " checked" : ""}> Prikaži zadatke${exrCount ? ` (${exrCount})` : ""}</label>
   <button id="expandAll">Proširi sve</button>
   <button id="collapseAll">Sažmi sve</button>
-  <div id="legend">${legend}</div>
+  <div id="legend">${stateLegend}${legend}</div>
 </div>
 <div id="canvas">
 <svg id="svg">
-  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker></defs>
-  <g id="world"><g id="glayer">${groupSvgs}</g><g id="elayer"></g></g>
+  <g id="world"><g id="glayer">${groupSvgs}</g></g>
 </svg>
 </div>
 <aside id="panel"><button id="close" title="Zatvori">×</button><div id="panel-body"></div></aside>
-<div id="footer">Generirano ${escapeHtml(forest.created ?? "")} · forest-digest · klik na grupu otvara/zatvara, klik na karticu otvara sadržaj</div>
+<div id="footer"><span>Generirano ${escapeHtml(forest.created ?? "")} · forest-digest · klik na grupu otvara/zatvara, klik na karticu otvara sadržaj</span><button id="resetProg">Poništi napredak</button><span id="storage-note"></span></div>
 <script>window.FOREST = ${dataJson};</script>
 <script>window.TREES = ${contentJson};</script>
 <script>
@@ -695,25 +745,24 @@ ${clientJs()}
 }
 
 // The page's runtime: applies build-time coordinates, stacks group bands,
-// draws edges between precomputed anchors, pan/zoom, search, side panel.
-// No layout happens here. Single-quoted strings only — this file lives
-// inside a template literal.
+// computes the three reading states from the full depends lists and the
+// reader's marks, pan/zoom, search, side panel. No layout happens here.
+// Single-quoted strings only — this file lives inside a template literal.
 function clientJs() {
   return String.raw`(function () {
   'use strict';
   var F = window.FOREST, G = F.geom;
   var svg = document.getElementById('svg');
   var world = document.getElementById('world');
-  var elayer = document.getElementById('elayer');
   var expanded = {};
   F.groups.forEach(function (g, i) { expanded[g.id] = i === 0; });
   var showPrf = false;
   var showExr = F.showExrDefault;
   var selected = null;
 
-  // Absolute position of every visible node + each group's frame,
-  // recomputed from the precomputed variant coordinates on every toggle.
-  var abs = {}, frames = {};
+  // Each group's frame, recomputed from the precomputed variant
+  // coordinates on every toggle; nodes carry their own transforms.
+  var frames = {};
   function variantKey() { return (showExr ? '1' : '0') + (showPrf ? '1' : '0'); }
   function vk(prf, exr) { return (exr ? '1' : '0') + (prf ? '1' : '0'); }
 
@@ -723,7 +772,7 @@ function clientJs() {
   }
 
   function relayout() {
-    abs = {}; frames = {};
+    frames = {};
     var y = 20, x = 20;
     var key = variantKey();
     F.groups.forEach(function (g) {
@@ -753,85 +802,78 @@ function clientJs() {
         n.style.display = hidden ? 'none' : '';
         if (!hidden) {
           n.setAttribute('transform', 'translate(' + p[0] + ',' + p[1] + ')');
-          // Only a node in an open group is a real edge anchor; a collapsed
-          // group's members aggregate to the group box instead.
-          if (open) {
-            abs[id] = { x: x + G.PAD + p[0], y: y + G.HEADER_H + G.PAD + p[1] };
-          }
         }
         var badge = n.querySelector('.prfbadge');
         if (badge) badge.style.display = showPrf ? 'none' : '';
       });
       y += h + 26;
     });
-    drawEdges();
+    applyStates();
     applySearch();
   }
 
-  function anchor(id, asSource) {
-    var f = frames[F.nodes[id].group];
-    var s = nodeSize(id);
-    if (abs[id]) {
-      return { x: abs[id].x + (asSource ? s[0] : 0), y: abs[id].y + s[1] / 2, node: true };
+  // --- reading states -----------------------------------------------------
+  // savladano: the reader marked it. spremno: every id in its FULL depends
+  // list is savladano (vacuously true for roots). nije spremno: otherwise.
+  var done = {};
+  var storageOk = true;
+  function stateOf(id) {
+    if (done[id]) return 'done';
+    var deps = F.deps[id] || [];
+    for (var i = 0; i < deps.length; i++) {
+      if (!done[deps[i]]) return 'not';
     }
-    return null;
+    return 'ready';
   }
-
-  function edgePath(a, b, horizontal) {
-    if (horizontal) {
-      var mx = (a.x + b.x) / 2;
-      return 'M' + a.x + ' ' + a.y + ' C' + mx + ' ' + a.y + ',' + mx + ' ' + b.y + ',' + b.x + ' ' + b.y;
-    }
-    var my = (a.y + b.y) / 2;
-    return 'M' + a.x + ' ' + a.y + ' C' + a.x + ' ' + my + ',' + b.x + ' ' + my + ',' + b.x + ' ' + b.y;
-  }
-
-  function boxAnchor(g, other) {
-    var f = frames[g], o = frames[other];
-    var down = o.y > f.y;
-    return { x: f.x + f.w / 2, y: down ? f.y + f.h : f.y };
-  }
-
-  function drawEdges() {
-    var parts = [];
-    var agg = {};
-    F.edges.forEach(function (e) {
-      var u = e[0], v = e[1];
-      var gu = F.nodes[u].group, gv = F.nodes[v].group;
-      var au = abs[u], av = abs[v];
-      if (au && av) {
-        var a = anchor(u, true), b = anchor(v, false);
-        if (gu === gv) {
-          parts.push({ d: edgePath(a, b, true), u: u, v: v });
-        } else {
-          var su = nodeSize(u), sv = nodeSize(v);
-          var down = av.y > au.y;
-          var pa = { x: au.x + su[0] / 2, y: down ? au.y + su[1] : au.y };
-          var pb = { x: av.x + sv[0] / 2, y: down ? av.y : av.y + sv[1] };
-          parts.push({ d: edgePath(pa, pb, false), u: u, v: v });
-        }
-      } else if (gu !== gv && gu != null && gv != null &&
-                 (!frames[gu].open || !frames[gv].open)) {
-        // A collapsed group swallows its members' edges into one aggregate
-        // per group pair; an edge hidden by a toggle is simply not drawn.
-        var k = gu + '>' + gv;
-        agg[k] = (agg[k] || 0) + 1;
+  function loadProgress() {
+    var raw = null;
+    try { raw = localStorage.getItem(F.progressKey); }
+    catch (e) { storageOk = false; }
+    if (!raw) return;
+    try {
+      var p = JSON.parse(raw);
+      if (p && p.v === 1 && p.done && p.done.forEach) {
+        p.done.forEach(function (id) { if (F.nodes[id]) done[id] = true; });
       }
+    } catch (e) { /* corrupt entry: start clean, overwritten on next save */ }
+  }
+  function saveProgress() {
+    if (!storageOk) return;
+    try {
+      localStorage.setItem(F.progressKey,
+        JSON.stringify({ v: 1, done: Object.keys(done).sort() }));
+    } catch (e) { storageOk = false; storageNotice(); }
+  }
+  function storageNotice() {
+    document.getElementById('storage-note').textContent =
+      'Napredak se ne može trajno spremiti — vrijedi samo dok je stranica otvorena.';
+  }
+
+  function applyStates() {
+    document.querySelectorAll('.node').forEach(function (n) {
+      var st = stateOf(n.getAttribute('data-id'));
+      n.classList.toggle('st-done', st === 'done');
+      n.classList.toggle('st-ready', st === 'ready');
+      n.classList.toggle('st-not', st === 'not');
     });
-    Object.keys(agg).sort().forEach(function (k) {
-      var uv = k.split('>');
-      var a = boxAnchor(+uv[0], +uv[1]);
-      var b = boxAnchor(+uv[1], +uv[0]);
-      parts.push({ d: edgePath(a, b, false), agg: true, n: agg[k] });
+    F.groups.forEach(function (g) {
+      var nDone = 0, anyReady = false;
+      g.members.forEach(function (id) {
+        var st = stateOf(id);
+        if (st === 'done') nDone++;
+        else if (st === 'ready') anyReady = true;
+      });
+      var el = document.getElementById('grp-' + g.id);
+      el.querySelector('.grp-count').textContent =
+        nDone + '/' + g.members.length + ' savladano';
+      // The state outline belongs to the collapsed bar; an open group
+      // shows its members' own outlines instead.
+      var closed = frames[g.id] ? !frames[g.id].open : true;
+      var allDone = g.members.length > 0 && nDone === g.members.length;
+      el.classList.toggle('g-done', closed && allDone);
+      el.classList.toggle('g-ready', closed && !allDone && anyReady);
+      el.classList.toggle('g-muted', closed && !allDone && !anyReady);
     });
-    var html = '';
-    parts.forEach(function (p) {
-      html += '<path class="edge' + (p.agg ? ' agg' : '') + '"' +
-        (p.u ? ' data-u="' + p.u + '" data-v="' + p.v + '"' : '') +
-        ' d="' + p.d + '" marker-end="url(#arrow)"' +
-        (p.agg ? ' stroke-width="' + Math.min(1 + p.n * 0.4, 4) + '"><title>' + p.n + ' veza</title></path>' : '/>');
-    });
-    elayer.innerHTML = html;
   }
 
   // --- interactions -------------------------------------------------------
@@ -875,6 +917,8 @@ function clientJs() {
 
   var panel = document.getElementById('panel');
   var panelBody = document.getElementById('panel-body');
+  var markBox = document.createElement('div');
+  markBox.id = 'panel-mark';
   function openPanel(id) {
     if (selected) {
       var prev = document.querySelector('.node.sel');
@@ -884,9 +928,109 @@ function clientJs() {
     var el = document.querySelector('.node[data-id="' + id + '"]');
     if (el) el.classList.add('sel');
     panelBody.innerHTML = window.TREES[id] || '';
+    // The mark control sits right under the head so the panel's primary
+    // action is visible without scrolling.
+    var head = panelBody.querySelector('.panel-head');
+    if (head) head.after(markBox); else panelBody.prepend(markBox);
+    renderMarkUI(id);
     panel.classList.add('open');
     panel.scrollTop = 0;
   }
+
+  function escText(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function stateLabel(st) {
+    return st === 'done' ? 'savladano'
+      : st === 'ready' ? 'spremno za čitanje' : 'nije spremno';
+  }
+  function testPhrase(id) {
+    return 'provjeri koliko razumijem: ' + F.nodes[id].title;
+  }
+  function renderMarkUI(id, opts) {
+    opts = opts || {};
+    var st = stateOf(id);
+    var h = '<div class="mark-state">Stanje: ' + stateLabel(st) + '</div>';
+    h += st === 'done'
+      ? '<button class="mark-btn is-done" data-act="unmark">Vrati na nesavladano</button>'
+      : '<button class="mark-btn" data-act="mark">Označi kao savladano ✓</button>';
+    if (opts.prompt) {
+      h += '<div class="mark-prompt">' +
+        '<button class="mp-close" data-act="dismiss" title="Odbaci">×</button>' +
+        '<p>Želiš li se prvo provjeriti? Otvori <code>/tutor</code> u Claude Codeu i zatraži:</p>' +
+        '<p><code>' + escText(testPhrase(id)) + '</code></p>' +
+        '<div class="mp-actions">' +
+        '<button data-act="copy">Kopiraj</button>' +
+        '<button data-act="confirm">Samo označi</button>' +
+        '</div></div>';
+    }
+    if (opts.note) h += '<div class="mark-hint">' + escText(opts.note) + '</div>';
+    markBox.innerHTML = h;
+  }
+  function markDone(id) {
+    var wasNotReady = stateOf(id) === 'not';
+    done[id] = true;
+    saveProgress();
+    applyStates();
+    renderMarkUI(id, wasNotReady
+      ? { note: 'Napomena: preduvjeti ovog stabla još nisu savladani.' }
+      : null);
+  }
+  // execCommand fallback for file:// contexts where the async clipboard
+  // API is unavailable or denied.
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+  markBox.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-act]');
+    if (!b || !selected) return;
+    var act = b.getAttribute('data-act');
+    if (act === 'unmark') {
+      delete done[selected];
+      saveProgress();
+      applyStates();
+      renderMarkUI(selected);
+    } else if (act === 'mark') {
+      // A merely-ready tree earns the self-test nudge first; a not-ready
+      // one is allowed straight through — the reader outranks the DAG.
+      if (stateOf(selected) === 'ready') renderMarkUI(selected, { prompt: true });
+      else markDone(selected);
+    } else if (act === 'confirm') {
+      markDone(selected);
+    } else if (act === 'dismiss') {
+      renderMarkUI(selected);
+    } else if (act === 'copy') {
+      var text = testPhrase(selected);
+      var fb = function (ok) {
+        b.textContent = ok ? 'Kopirano ✓' : 'Kopiranje nije uspjelo';
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { fb(true); },
+          function () { fb(legacyCopy(text)); }
+        );
+      } else {
+        fb(legacyCopy(text));
+      }
+    }
+  });
+  document.getElementById('resetProg').addEventListener('click', function () {
+    if (!confirm('Poništiti sav napredak? Sve oznake savladanosti bit će obrisane.')) return;
+    done = {};
+    try { localStorage.removeItem(F.progressKey); } catch (e) {}
+    applyStates();
+    if (selected) renderMarkUI(selected);
+  });
   document.getElementById('close').addEventListener('click', function () {
     panel.classList.remove('open');
   });
@@ -929,9 +1073,6 @@ function clientJs() {
       var t = document.querySelector('#grp-' + g.id + ' .grp-title');
       t.style.fill = any ? 'var(--accent)' : '';
     });
-    document.querySelectorAll('.edge').forEach(function (e) {
-      e.classList.toggle('dim', !!term);
-    });
   }
 
   // --- pan / zoom ---------------------------------------------------------
@@ -967,6 +1108,8 @@ function clientJs() {
     pan = null; canvas.classList.remove('panning');
   });
 
+  loadProgress();
+  if (!storageOk) storageNotice();
   relayout();
   // Start fitted to width, below the toolbar.
   var topbarH = document.getElementById('topbar').offsetHeight;

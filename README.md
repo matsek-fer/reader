@@ -21,6 +21,8 @@ one step of digestion rather than the product.
 | Vault format | The on-disk contract: `forest.json`, `trees/`, `index.md`, `views/` — [docs/forest-format.md](docs/forest-format.md) | **Draft 0.1, normative** |
 | Reference vault | A real CC BY vault built from the library's Lagrange material — [examples/mini-vault/](examples/mini-vault/) | **Done, 12 trees** |
 | Digester | The skill that turns a source into a vault (slice 1) | In progress |
+| Vault search | Hybrid retrieval over a vault's trees — `scripts/index-vault.mjs` writes `index/` per the library's D-003 embedding convention, `scripts/search-vault.mjs` fuses lexical + semantic (slice 2) | **Done** |
+| Ask skill | A studying member's question, answered from the vault first with clickable tree ids — [skills/ask/](skills/ask/SKILL.md) (slice 2) | **Done** |
 | Forest reader | Walks vaults by prerequisite instead of page order | Planned |
 | Tutor integration | Probe a statement, withhold its proof, ask for it | Planned |
 | Spec promotion | Format hardened into the `spec` repo once stable | When the Forest stabilizes |

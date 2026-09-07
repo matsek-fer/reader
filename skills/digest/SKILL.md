@@ -205,7 +205,11 @@ Point the member at Obsidian: *Open folder as vault* on the vault
 folder, start at `index.md` (the map), `views/dag.md` for the graph —
 wikilinks, mermaid and `$…$` math render with no plugins. For the whole
 work at a glance, `views/forest.html` opens in any browser, offline —
-groups expand on click, proofs and exercises toggle on demand. Remind them,
+groups expand on click, proofs and exercises toggle on demand, and every
+tree shows its reading state (savladano / spremno / nije spremno): marking
+trees as savladano in the side panel unlocks their dependents, remembers
+progress in the browser, and nudges toward a `/tutor` self-check first.
+Remind them,
 once more and in one sentence, whether this vault may leave their
 machine.
 
