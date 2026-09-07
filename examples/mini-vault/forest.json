@@ -1,0 +1,15 @@
+{
+  "schema_version": "forest-0.1",
+  "source": {
+    "title": "Lagrangeov teorem — bilješke iz MatSek knjižnice",
+    "authors": ["Relja Šegvić"],
+    "year": 2026,
+    "kind": "notes",
+    "license": "CC-BY-4.0"
+  },
+  "language": "hr",
+  "created": "2026-09-07",
+  "tool": "forest-digest",
+  "tool_version": "0.1.0",
+  "derivative": false
+}

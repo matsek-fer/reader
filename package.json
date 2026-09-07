@@ -1,0 +1,14 @@
+{
+  "name": "matsek-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MatSek Knowledge Forest — vault tooling (slice 1: format + validator)",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

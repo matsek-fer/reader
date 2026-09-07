@@ -1,0 +1,339 @@
+# The Forest vault format — draft 0.1
+
+**Status: normative draft.** This document defines the on-disk format the
+Knowledge Forest tools produce when they *digest* a work — a book, a paper,
+a set of notes — into a **vault** of small, independently addressable
+teaching objects called **trees**. A second implementation written from
+this document alone should agree with the reference tooling on every vault
+it accepts or rejects.
+
+It is a draft in the precise sense of the [relationship to spec
+v1](#relationship-to-bundle-spec-v1) section: vaults are a new, local-first
+artifact family, proven here in the field before any of it hardens into the
+`spec` repo's contract.
+
+A worked reference vault lives at
+[`examples/mini-vault/`](../examples/mini-vault/) — most rules below (it is non-derivative, so per-tree provenance is shown by the fixtures instead) is
+exercised there, and the vault doubles as documentation. Open it as an
+Obsidian vault to see the format render.
+
+## The model: one vault per digested work
+
+A vault is a **folder**. It holds one digested work and nothing else;
+copying the folder copies the vault.
+
+```
+<vault>/
+├── forest.json        machine truth about the vault and its source
+├── index.md           the work's root: its structure as a map of wikilinks
+├── trees/
+│   ├── def-coset.md   one tree — one teaching object — per file
+│   ├── thm-lagrange.md
+│   └── prf-lagrange-particija.md
+└── views/
+    ├── dag.md         mermaid dependency graph over the trees
+    └── by-concept.md  trees grouped under concept-registry headings
+```
+
+Obsidian is the interim UI: everything in a vault must render there —
+wikilinks, ` ```mermaid ` fences, `$…$` / `$$…$$` math — and the format is
+verified by construction against that renderer. When the Forest grows its
+own reader, the format does not change; the reader meets it where Obsidian
+already does.
+
+## forest.json
+
+A single JSON object:
+
+```json
+{
+  "schema_version": "forest-0.1",
+  "source": {
+    "title": "Undergraduate Algebra",
+    "authors": ["Serge Lang"],
+    "year": 2005,
+    "kind": "book",
+    "file": "sources/lang-undergraduate-algebra.pdf",
+    "license": "copyrighted",
+    "pages": "1-374"
+  },
+  "language": "hr",
+  "created": "2026-09-07",
+  "tool": "forest-digest",
+  "tool_version": "0.1.0",
+  "derivative": true,
+  "notice": "LOKALNO — izvedeno djelo, ne šalje se u knjižnicu"
+}
+```
+
+Field by field:
+
+| Field | Type | Rule |
+|---|---|---|
+| `schema_version` | string | Exactly `"forest-0.1"` for this draft. |
+| `source.title` | string | The digested work's title, verbatim. |
+| `source.authors` | array of strings | The work's authors. May be empty for anonymous notes. |
+| `source.year` | integer | Year of the edition digested. |
+| `source.kind` | string | `book`, `paper`, or `notes`. |
+| `source.file` | string | Path (vault-relative or as the member keeps it) to the source document. **Optional** when the source is not a single document — e.g. `notes` assembled from several files; then per-tree `source.ref` carries the pointers instead. |
+| `source.license` | string | The source's license identifier (e.g. `CC-BY-4.0`, `GFDL-1.3`), or exactly `"copyrighted"` when there is none to record. |
+| `source.pages` | string | Page range digested, e.g. `"1-374"` or `"120-158"`. Optional when `source.file` is absent. |
+| `language` | string | `hr` or `en` — the language of the tree bodies. One vault, one language: a mixed-language source is re-authored uniformly. |
+| `created` | string | ISO date `YYYY-MM-DD` of the digest. |
+| `tool` | string | `"forest-digest"` — the producing tool. |
+| `tool_version` | string | The tool's version, e.g. `"0.1.0"`. |
+| `derivative` | boolean | `true` iff the vault's content is a derivative work of a source the member does not hold redistribution rights to. See [Copyright](#copyright--the-hard-rules). |
+| `notice` | string | **Required iff `derivative` is `true`**, and then exactly `"LOKALNO — izvedeno djelo, ne šalje se u knjižnicu"`. Forbidden otherwise — a non-derivative vault carrying the notice signals a confused provenance claim, the same way a stray `adapted_from` does in bundle v1. |
+
+Unknown keys follow the bundle-spec rule verbatim: **`^x_` keys are allowed
+in every object at every level and must be preserved by every tool that
+rewrites the file; every other unknown key is an error.** Forward
+compatibility happens through `schema_version`, never through tolerated
+extras.
+
+## Trees — `trees/<id>.md`
+
+A tree is **one teaching object**: one theorem, one definition, one proof,
+one worked example. One object per file, never two. The file name is the
+id plus `.md`.
+
+### Ids
+
+`<taxon-prefix>-<kebab-slug>`, kebab-case ASCII (`[a-z0-9]+(-[a-z0-9]+)*`
+after the prefix). The prefix declares the taxon and must agree with the
+frontmatter `taxon` field:
+
+| Prefix | Taxon | The tree's job |
+|---|---|---|
+| `thm-` | `theorem` | A named or load-bearing result, statement only. |
+| `lem-` | `lemma` | A stepping-stone result, statement only. |
+| `prp-` | `proposition` | A result below theorem weight, statement only. |
+| `cor-` | `corollary` | A consequence of another statement tree, statement only. |
+| `def-` | `definition` | Introduces an object or property precisely. |
+| `axm-` | `axiom` | A postulate the work assumes rather than proves. |
+| `prf-` | `proof` | The proof of exactly one statement tree. Always its own tree — see [Proofs are separate trees](#proofs-are-separate-trees). |
+| `exm-` | `example` | Works a concrete instance of an already-stated idea. |
+| `exr-` | `exercise` | A task for the reader (with or without solution). |
+| `exp-` | `exposition` | Defines-and-develops prose — the load-bearing explanation a chapter section gives, when it is not a single formal statement. |
+| `mot-` | `motivation` | Why anyone cares — the problem the concept answers, the stakes. |
+| `int-` | `intuition` | The mental picture — analogy, visualization, "what it feels like". |
+| `rem-` | `remark` | A short aside: a warning, an edge case, a historical note. |
+| `con-` | `connection` | A bridge between two ideas — an equivalence, a contrast, a generalization. Must name both ends explicitly. |
+
+Assign the taxon by what the tree *does*, not what it mentions — a
+definition wrapped in a story is still `def-` if the definition is what the
+reader leaves with. The five soft taxa (`exposition`, `example`,
+`intuition`, `motivation`, `connection`) carry their meanings from the
+blog-writer's forest-readiness convention
+(`blog-writer/docs/forest-readiness.md`), which this format supersedes for
+vaults; the formal taxa (`theorem` … `exercise`) are the vault format's
+addition, because digested mathematics has formal structure blogs do not.
+
+### Frontmatter
+
+YAML frontmatter, one block per tree:
+
+```yaml
+---
+id: thm-lagrange
+taxon: theorem
+title: "Lagrangeov teorem"
+teaches: [lagrange]
+requires: [cosets, index]
+depends: [def-coset, def-index]
+source:
+  pages: "12-14"
+  ref: "Theorem 6.10"
+standalone: true
+---
+```
+
+| Field | Type | Rule |
+|---|---|---|
+| `id` | string | Equal to the filename stem. Ids are permanent: renaming a tree is a new tree. |
+| `taxon` | string | One of the fourteen taxa above; must match the id's prefix. |
+| `title` | string | Member-facing title in the vault's `language`. |
+| `teaches` | array | Concept-registry ids (from `library/concepts/concepts.yaml`) this tree teaches. May be empty (a `prf-` or `rem-` often teaches nothing new by itself). |
+| `requires` | array | Concept-registry ids the reader must already hold to read this tree — background the *vault* does not supply. Concepts supplied by another tree in this vault belong in `depends`, not here. |
+| `depends` | array | Ids of trees **in this vault** — the intra-work DAG. See [depends](#depends--the-intra-work-dag). |
+| `source` | object | `{ pages: "12-14", ref: "Theorem 6.10" }` — where in the source work this tree comes from, using the work's own labels. **Required when the vault is `derivative: true`** — it is the provenance pointer that lets a reader with the book open to the original. Optional otherwise, but recommended; in a vault digested from open bundles, `ref` may carry the bundle id (e.g. `"proof/ga-lagrange-particija"`). |
+| `standalone` | boolean | The author's honest claim that the body passes the [standalone discipline](#the-standalone-discipline). `false` keeps the tree attached to the trees it depends on — a coda, not a node a walk may serve alone. |
+
+`^x_` keys are preserved here as everywhere. In particular, a digester
+promoting a forest-ready blog's sections into trees carries each section's
+`x_forest` verdict forward as the tree's `taxon`/`standalone` and may keep
+the original under `x_`.
+
+### depends — the intra-work DAG
+
+`depends: [a, b]` means: **understanding this tree needs those trees.** Not
+"is mentioned by", not "comes earlier in the book" — a reader who has not
+absorbed `a` and `b` cannot honestly work through this tree. The edges over
+all trees in a vault must form a **DAG**: a cycle would make "read
+prerequisites first" meaningless, exactly as it would in the concept
+registry, and the reference tooling rejects it.
+
+Two clarifications that keep the DAG honest:
+
+- A **proof depends on its statement** (`prf-lagrange-particija` depends on
+  `thm-lagrange`), never the reverse. The statement tree's body *links* to
+  its proofs with `[[prf-…]]` — a body wikilink is a pointer, **not** a
+  `depends` edge, so no cycle arises.
+- `depends` is intra-vault only. Cross-vault and background needs are
+  expressed through `requires` (concept ids), which the Forest resolves
+  against the registry and other vaults at walk time.
+
+### Proofs are separate trees
+
+Every proof is its own tree, `taxon: proof`, depending on the statement it
+proves; the statement tree links to it (`Dokaz: [[prf-…]]`), and a
+statement may link several (`[[prf-lagrange-particija]]`,
+`[[prf-lagrange-djelovanje]]`).
+
+This is the format's one non-negotiable structural rule, for two reasons:
+
+1. **Views can fold proofs away.** A map of a book's results
+   (`views/dag.md`, a chapter summary, a revision sheet) shows statements
+   with proofs collapsed to links — impossible if proof text lives inside
+   statement trees.
+2. **The tutor can probe a proof independently.** "State Lagrange" and
+   "prove Lagrange" are different competencies; separate trees let a
+   session serve the statement, withhold the proof, and ask the member to
+   attempt it — the same split bundle v1 makes with `statement.md` /
+   `proof.md`.
+
+A work's proof of theorem X that pauses to prove lemma Y inline is
+digested as *two* proof trees (`prf-x`, `prf-y`) and a lemma tree, with
+`prf-x` depending on `lem-y`.
+
+### The body
+
+The body is the **re-authored** content — the digester writes the tree in
+its own words, in the vault's language, at the granularity the tree's taxon
+demands. It is never a transcription (see [Copyright](#copyright--the-hard-rules)).
+
+- **Math is clean KaTeX**: `$…$` inline, `$$…$$` display. No source-PDF
+  artifacts, no image-of-an-equation.
+- **Cross-references are Obsidian wikilinks**: `[[thm-lagrange]]` or
+  `[[thm-lagrange|Lagrangeov teorem]]`, targeting tree ids in this vault.
+- **No scrollback language in standalone trees** — see next section.
+
+### The standalone discipline
+
+Imported, with credit, from the blog-writer's forest-readiness convention
+(`blog-writer/docs/forest-readiness.md` §1), where it was first stated for
+blog sections; a tree is a section that has fully left its book:
+
+A tree with `standalone: true` is written to be read **alone**, with no
+scrollback: never "as we saw above", "ranije", "u prethodnom poglavlju",
+"using the same trick" — a forest walk has no above, no previous, no same.
+Every leaned-on term is defined in the tree or wikilinked; notation is
+restated, not assumed ("gdje je $H \le G$ podgrupa" costs one clause). The
+sentence or two of redundancy per tree is the price of the forest.
+
+A tree that honestly fails this — an intuition that only lands as a coda to
+its exposition — says `standalone: false`, and the Forest keeps it attached
+to its `depends` targets instead of serving it alone.
+
+## index.md — the work's root
+
+`index.md` is the vault's entry point and the work's map: the source's own
+structure (chapters or thematic parts as headings) rendered as an ordered
+list of wikilinks, each with a one-line gloss:
+
+```markdown
+# Undergraduate Algebra — karta
+
+## 2 · Grupe
+
+- [[def-group]] — što je grupa: operacija, asocijativnost, neutralni, inverzi
+- [[thm-lagrange]] — red podgrupe dijeli red grupe
+```
+
+Obsidian renders it as the book's clickable table of contents; the Forest
+treats it as the digester's claim of coverage — a source section with no
+tree in the index was deliberately skipped, not forgotten.
+
+## views/
+
+Views are **derived** files — regenerable from the trees, committed anyway
+so the vault renders without tooling. A tool that edits trees regenerates
+the views before it is done.
+
+- **`views/dag.md`** — a ` ```mermaid ` fence drawing the `depends` graph.
+  **Statement and prose trees only: `prf-` trees are omitted**, along with
+  their edges, for legibility — a book's DAG doubles in size and halves in
+  meaning when every proof shadows its statement. Node labels are tree ids;
+  edges point from prerequisite to dependent (an arrow `def-coset -->
+  thm-lagrange` reads "coset feeds Lagrange").
+- **`views/by-concept.md`** — the vault inverted through the registry: one
+  heading per concept id appearing in any tree's `teaches`, listing that
+  concept's trees as wikilinks with their taxa. The view a tutor uses to
+  answer "what does this vault hold about `cosets`?".
+
+## Copyright — the hard rules
+
+A vault digested from a copyrighted work is a **derivative work**. The
+rules, stated once here and repeated by the digest skill to the member
+every time it runs:
+
+1. A vault of a copyrighted source is `derivative: true`, carries the
+   `notice`, **stays local, and never enters the library** — not as a
+   vault, not tree-by-tree, not "just the definitions". Re-authoring does
+   not launder provenance; per-tree `source.pages`/`ref` exists precisely
+   so the derivation is never deniable.
+2. An openly-licensed source records its actual license in
+   `source.license`, and its terms are honored (attribution in
+   `forest.json`, at minimum).
+3. **GFDL and CC BY-SA sources (Wikipedia, math.StackExchange, …) still
+   never enter the library**, even though the vault itself is legal to
+   make and share under their terms: share-alike is incompatible with the
+   library's CC BY license (spec `DECISIONS.md` D-001, and the provenance
+   policy's StackExchange rule). Such a vault is shareable *as a vault*
+   under its inherited license — it is the library door that stays closed.
+4. Only a vault built from CC BY (or more permissive) material, or from
+   the member's own writing, may be `derivative: false` — and only such
+   material may ever be extracted back into library bundles, through the
+   normal provenance-blocked submission path.
+
+Local-first is therefore not a limitation of slice 1 but the design: the
+common case — a member digesting the textbook they are actually studying —
+produces a vault that is legally *theirs to use and nobody's to
+redistribute*, and the format makes that boundary machine-visible
+(`derivative`, `notice`) instead of relying on memory.
+
+## Relationship to bundle spec v1
+
+Vaults are a **new artifact family**, not a new bundle type. Bundle format
+v1 (`spec/bundles.md`) governs what the *library* accepts — public,
+CC BY, one artifact per folder, validated in CI. Vaults are the opposite
+end of the pipeline: local-first, usually derivative, one *work* per
+folder, many objects inside. The two meet only where the rules above allow
+extraction into a bundle, which then plays entirely by v1's rules.
+
+Shared DNA is deliberate: the concept registry is the same vocabulary
+(`teaches`/`requires` resolve against `concepts.yaml`), the `^x_`
+unknown-key rule is adopted verbatim, ids are permanent kebab-case, and
+DAG-acyclicity is enforced the same way. The taxa extend forest-readiness's
+five with the formal kinds digested mathematics needs.
+
+**Promotion path:** this document is the draft. When the Forest stabilizes
+— the digester has produced real vaults, the reader walks them, the sharp
+edges are filed — the format is promoted into the `spec` repo as a
+schema-backed contract (its own schema file, validator rules, a decision
+log entry), and `schema_version` graduates from `forest-0.1` accordingly.
+Until then, this file is normative and tools pin against it.
+
+### `source.redistribution` — the third provenance state
+
+`derivative: true` alone conflates two situations the first real vault
+immediately hit. The optional `source.redistribution` field separates
+them:
+
+| value | meaning | required `notice` (verbatim) |
+|---|---|---|
+| `"none"` (default) | copyrighted source; the vault must stay local | `LOKALNO — izvedeno djelo, ne šalje se u knjižnicu` |
+| `"share-alike-only"` | GFDL / CC BY-SA source; the vault MAY be shared **as a vault under the source's own terms** | `IZVEDENO — smije se dijeliti samo pod licencom izvora (share-alike); ne ide u knjižnicu` |
+
+Either way the vault never enters the library: D-001 pins the library to
+CC BY, and share-alike terms cannot be laundered into it.
