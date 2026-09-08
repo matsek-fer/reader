@@ -531,7 +531,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
       renderBody(t.body, trees) +
       `<p class="obsidian"><a href="obsidian://open?path=${encodeURIComponent(
         path.join(absVault, t.file)
-      )}">Otvori u Obsidianu</a></p>`;
+      )}">Otvori u Obsidianu</a> <span class="obs-hint">· radi tek kad mapu trezora jednom otvoriš kao vault (<em>Open folder as vault</em>)</span></p>`;
   }
 
   // SVG bodies for every node card, emitted once; JS positions them.
@@ -673,6 +673,7 @@ svg { width: 100%; height: 100%; display: block; }
 .node .accent { fill: var(--c); stroke: none; }
 .node .ntitle { fill: var(--fg); font-size: 11px; pointer-events: none; }
 .node .nid { fill: var(--fg-muted); font-size: 10px; font-family: ui-monospace, monospace; pointer-events: none; }
+.obs-hint { color: var(--muted, #888); font-size: .78em; }
 .node .prfbadge { fill: var(--fg-muted); font-size: 10px; }
 .node.st-done rect:first-of-type { stroke: var(--st-done); stroke-width: 1.6; fill: color-mix(in srgb, var(--st-done) 10%, var(--card)); }
 .node.st-done:hover rect:first-of-type { fill: color-mix(in srgb, var(--st-done) 18%, var(--card)); }
