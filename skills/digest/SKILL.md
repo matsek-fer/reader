@@ -45,7 +45,12 @@ interview the member — ask, don't assume:
   `statements-only` (definitions, axioms and statement trees; proofs,
   examples and exercises are still inventoried but marked
   `skipped (depth)` so a later session can deepen the vault).
-- **Where** — the vault folder. Default: a new folder named after the
+- **Where** — the vault folder. PERSISTENT only: never /tmp (wiped on
+  shutdown) and never inside one of the club's git repos (a derivative
+  vault must not ride into a public push) — suggest a dedicated
+  `vaults/` home. Note aloud: the forest.html "Otvori u Obsidianu"
+  links work only after the member opens this folder once in Obsidian
+  via *Open folder as vault*. Default: a new folder named after the
   work in kebab (`lang-undergraduate-algebra/`) wherever the member
   keeps such things; never inside this plugin.
 
