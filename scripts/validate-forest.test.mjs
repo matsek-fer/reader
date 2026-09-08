@@ -52,6 +52,11 @@ const fixtures = [
   ["bad-taxon", "invalid taxon"],
   ["unresolved-depend", 'depends on unknown tree "def-nema"'],
   ["derivative-no-pages", "source.pages is required in a derivative vault"],
+  // origin enum: only digest/member/agent name an author of a tree.
+  ["bad-origin", 'origin must be "digest", "member" or "agent"'],
+  // A member/agent tree is not from the source, so claiming source pages is
+  // a confused provenance claim — the vault-side stray-adapted_from.
+  ["origin-with-pages", 'must not carry source.pages'],
 ];
 
 for (const [name, expected] of fixtures) {
@@ -98,7 +103,11 @@ test('fixture missing-views fails on "views are part of the format"', () => {
 });
 
 test("share-alike derivative vault with the SA notice passes clean", () => {
+  // Also covers origin defaults: def-alfa has no origin (= digest, so its
+  // source.pages is required and present) and rem-vlastita-biljeska is
+  // origin: agent, valid in a derivative vault precisely without pages.
   const { status, out } = run(["scripts/test-fixtures/share-alike"]);
   assert.equal(status, 0, out);
+  assert.ok(!out.includes("error:"), out);
 });
 

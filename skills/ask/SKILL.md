@@ -107,7 +107,11 @@ If the member accepts, write the tree(s) per
 digester obeys: standalone body, honest `depends`, registry-resolved
 concepts, no invented concept ids. A grown tree has no `source` block —
 it is the member's material, not the digested work's; do not attribute
-it to the source's pages. Then:
+it to the source's pages — and it MUST carry `origin: "agent"` (or
+`origin: "member"` when the member dictated the content and you only
+transcribed). Without `origin`, the tree defaults to `digest`, fails
+vault validation in a derivative vault, and the library firewall will
+refuse it — `origin` is the one field the whole growth loop reads. Then:
 
 - add it to `index.md` (a closing section like `## Dodatci` keeps
   member-grown trees distinct from the work's own structure),

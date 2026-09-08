@@ -43,6 +43,10 @@ const TAXA = new Set(Object.values(PREFIX_TO_TAXON));
 // deliberately not here even though they are formal statements.
 const PROVABLE_TAXA = new Set(["theorem", "lemma", "proposition", "corollary"]);
 
+// Who authored a tree's content. Absent means "digest" — re-authored from the
+// source work — so every pre-origin tree keeps its meaning unchanged.
+const ORIGINS = new Set(["digest", "member", "agent"]);
+
 // Scrollback phrases (hr + en) that betray a tree still leaning on its book's
 // page order. Matched on letter boundaries, case-insensitively, so "iznad"
 // inside a longer word never fires but a bare "ranije" does.
@@ -306,7 +310,7 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
     const { file, stem, fm, body } = t;
     checkKeys(
       fm,
-      new Set(["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone"]),
+      new Set(["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin"]),
       file,
       err
     );
@@ -362,13 +366,25 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
         }
       }
     }
+    if (fm.origin !== undefined && !ORIGINS.has(fm.origin)) {
+      err(`${file}: origin must be "digest", "member" or "agent", got ${JSON.stringify(fm.origin)}`);
+    }
+
     // In a derivative vault the per-tree pointer is the provenance trail —
-    // without pages a reader with the book cannot find the original.
+    // without pages a reader with the book cannot find the original. That
+    // applies only to digest-origin trees; a member/agent tree is NOT from
+    // the source, so carrying source.pages would be a confused provenance
+    // claim (the stray-adapted_from error of bundle v1).
     if (derivative) {
-      if (!isPlainObject(fm.source)) {
-        err(`${file}: source is required in a derivative vault (missing source.pages)`);
-      } else if (typeof fm.source.pages !== "string" || fm.source.pages.length === 0) {
-        err(`${file}: source.pages is required in a derivative vault`);
+      const origin = ORIGINS.has(fm.origin) ? fm.origin : fm.origin === undefined ? "digest" : null;
+      if (origin === "digest") {
+        if (!isPlainObject(fm.source)) {
+          err(`${file}: source is required in a derivative vault (missing source.pages)`);
+        } else if (typeof fm.source.pages !== "string" || fm.source.pages.length === 0) {
+          err(`${file}: source.pages is required in a derivative vault`);
+        }
+      } else if (origin !== null && isPlainObject(fm.source) && fm.source.pages !== undefined) {
+        err(`${file}: a tree with origin "${origin}" must not carry source.pages — it is not from the source work`);
       }
     }
 

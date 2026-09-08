@@ -1,0 +1,3 @@
+# Karta
+
+- [[def-alfa]] — alfa

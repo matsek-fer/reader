@@ -23,6 +23,7 @@ one step of digestion rather than the product.
 | Digester | The skill that turns a source into a vault (slice 1) | In progress |
 | Vault search | Hybrid retrieval over a vault's trees — `scripts/index-vault.mjs` writes `index/` per the library's D-003 embedding convention, `scripts/search-vault.mjs` fuses lexical + semantic (slice 2) | **Done** |
 | Ask skill | A studying member's question, answered from the vault first with clickable tree ids — [skills/ask/](skills/ask/SKILL.md) (slice 2) | **Done** |
+| Grow skill | A member's own trees become library bundles, through the provenance firewall — `scripts/grow-bundle.mjs` + [skills/grow/](skills/grow/SKILL.md) (slice 3) | **Done** |
 | Forest reader | Walks vaults by prerequisite instead of page order | Planned |
 | Tutor integration | Probe a statement, withhold its proof, ask for it | Planned |
 | Spec promotion | Format hardened into the `spec` repo once stable | When the Forest stabilizes |
@@ -47,8 +48,11 @@ No plugins required; math uses Obsidian's built-in `$…$` rendering.
 
 A vault digested from a copyrighted book is a **derivative work**: it is
 marked `derivative: true`, carries the notice *"LOKALNO — izvedeno
-djelo, ne šalje se u knjižnicu"*, and **stays on your machine — it never
-enters the library**, whole or in parts. Openly-licensed sources record
+djelo, ne šalje se u knjižnicu"*, and **stays on your machine — its digested content never
+enters the library**, whole or in parts. The one door out is growth:
+a tree the member (or an agent, for them) authored *inside* the vault —
+`origin: member`/`agent` — may become a library bundle via `/grow`,
+after a provenance interview affirming it is genuinely original. Openly-licensed sources record
 their license; GFDL/CC BY-SA material (Wikipedia, math.StackExchange) is
 still barred from the library because share-alike is incompatible with
 its CC BY license. Only CC BY-or-freer material — like the reference

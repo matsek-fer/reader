@@ -156,8 +156,9 @@ standalone: true
 | `teaches` | array | Concept-registry ids (from `library/concepts/concepts.yaml`) this tree teaches. May be empty (a `prf-` or `rem-` often teaches nothing new by itself). |
 | `requires` | array | Concept-registry ids the reader must already hold to read this tree — background the *vault* does not supply. Concepts supplied by another tree in this vault belong in `depends`, not here. |
 | `depends` | array | Ids of trees **in this vault** — the intra-work DAG. See [depends](#depends--the-intra-work-dag). |
-| `source` | object | `{ pages: "12-14", ref: "Theorem 6.10" }` — where in the source work this tree comes from, using the work's own labels. **Required when the vault is `derivative: true`** — it is the provenance pointer that lets a reader with the book open to the original. Optional otherwise, but recommended; in a vault digested from open bundles, `ref` may carry the bundle id (e.g. `"proof/ga-lagrange-particija"`). |
+| `source` | object | `{ pages: "12-14", ref: "Theorem 6.10" }` — where in the source work this tree comes from, using the work's own labels. **Required when the vault is `derivative: true` and the tree is digest-origin** (see `origin` below) — it is the provenance pointer that lets a reader with the book open to the original. Optional otherwise, but recommended; in a vault digested from open bundles, `ref` may carry the bundle id (e.g. `"proof/ga-lagrange-particija"`). |
 | `standalone` | boolean | The author's honest claim that the body passes the [standalone discipline](#the-standalone-discipline). `false` keeps the tree attached to the trees it depends on — a coda, not a node a walk may serve alone. |
+| `origin` | string | **Optional.** Who authored this tree's content: `digest`, `member`, or `agent`. **Absent means `digest`** — every tree the digest writes is re-authored from the source work, and every pre-`origin` tree is a digest tree. `member` and `agent` mark trees grown *inside* the vault after the digest: a member's own writing, or content a model drafted for the member. Origin is what the library firewall reads — in a `derivative: true` vault only `member`/`agent` trees may ever be extracted into library bundles (see [Copyright](#copyright--the-hard-rules)), and such a tree must **not** carry `source.pages`: it is not from the source, and claiming both origins at once is a confused provenance claim, the same class of error as a stray `adapted_from` in bundle v1. Consequently the derivative-vault rule that `source.pages` is required applies only to digest-origin trees. Tools that create trees (`/ask`'s growth path, `/grow`) write `origin` explicitly. |
 
 `^x_` keys are preserved here as everywhere. In particular, a digester
 promoting a forest-ready blog's sections into trees carries each section's
@@ -311,10 +312,13 @@ rules, stated once here and repeated by the digest skill to the member
 every time it runs:
 
 1. A vault of a copyrighted source is `derivative: true`, carries the
-   `notice`, **stays local, and never enters the library** — not as a
-   vault, not tree-by-tree, not "just the definitions". Re-authoring does
-   not launder provenance; per-tree `source.pages`/`ref` exists precisely
-   so the derivation is never deniable.
+   `notice`, and its **digested content stays local and never enters the
+   library** — not as a vault, not tree-by-tree, not "just the
+   definitions". Re-authoring does not launder provenance; per-tree
+   `source.pages`/`ref` exists precisely so the derivation is never
+   deniable. The one door out of a derivative vault is a tree the digest
+   did NOT write — `origin: member`/`agent`, no `source.pages` — through
+   `/grow`'s firewall and provenance interview.
 2. An openly-licensed source records its actual license in
    `source.license`, and its terms are honored (attribution in
    `forest.json`, at minimum).
@@ -325,9 +329,11 @@ every time it runs:
    policy's StackExchange rule). Such a vault is shareable *as a vault*
    under its inherited license — it is the library door that stays closed.
 4. Only a vault built from CC BY (or more permissive) material, or from
-   the member's own writing, may be `derivative: false` — and only such
-   material may ever be extracted back into library bundles, through the
-   normal provenance-blocked submission path.
+   the member's own writing, may be `derivative: false`. Extraction into
+   library bundles is open to such vaults wholesale — and, from a
+   derivative vault, ONLY to its `origin: member`/`agent` trees (rule 1's
+   door), never to digested content. Both routes pass through the same
+   provenance-gated submission path.
 
 Local-first is therefore not a limitation of slice 1 but the design: the
 common case — a member digesting the textbook they are actually studying —
@@ -348,6 +354,33 @@ so it works out of the box; personal vaults typically regenerate.
 `scripts/search-vault.mjs` fuses lexical and cosine signals over it and
 degrades to lexical-only without the model (the first hybrid run
 downloads ~130 MB, once).
+
+## Growth: from vault tree to library bundle
+
+Digestion brings work in; growth sends a member's own work out.
+`scripts/grow-bundle.mjs` mechanically converts chosen trees into a
+bundle-v1 **skeleton** (problem, proof or blog folder: content files
+with vault-local wikilinks resolved to plain text, a prefilled
+`manifest.json`, an annotation draft), and the `/grow` skill
+(`skills/grow/SKILL.md`) wraps it in the member-facing flow — polish,
+the provenance interview, concept minting, spec validation, PR
+hand-off. Like `views/` and `index/`, the emitted folder is a derived
+artifact of the trees; unlike them it leaves the vault, and from that
+moment plays entirely by bundle v1's rules.
+
+Both script and skill enforce the **firewall**, which is `origin`'s
+reason to exist: a tree may become library content only if the vault is
+not derivative, or the tree's `origin` is `member`/`agent` *and* the
+member affirms its originality in the provenance interview. Digest-origin
+trees of a `derivative: true` vault are refused mechanically, before
+anything is written — re-authoring does not launder provenance (see
+[Copyright](#copyright--the-hard-rules) and
+`spec/policies/provenance.md`), and the refusal is final by design: no
+interview can talk its way past it.
+
+A grown tree gains a backlink in its frontmatter — `x_library:
+"<bundle-id>"` (tool-private `x_` space) — so the vault remembers what
+it seeded and tools stop offering the tree for growth again.
 
 ## Relationship to bundle spec v1
 

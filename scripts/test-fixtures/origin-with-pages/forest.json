@@ -1,0 +1,18 @@
+{
+  "schema_version": "forest-0.1",
+  "source": {
+    "title": "Fixture Algebra",
+    "authors": ["A. Autor"],
+    "year": 2005,
+    "kind": "book",
+    "file": "sources/fixture-algebra.pdf",
+    "license": "copyrighted",
+    "pages": "1-100"
+  },
+  "language": "hr",
+  "created": "2026-09-08",
+  "tool": "forest-digest",
+  "tool_version": "0.1.0",
+  "derivative": true,
+  "notice": "LOKALNO — izvedeno djelo, ne šalje se u knjižnicu"
+}
