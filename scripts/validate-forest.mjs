@@ -310,7 +310,7 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
     const { file, stem, fm, body } = t;
     checkKeys(
       fm,
-      new Set(["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin"]),
+      new Set(["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin", "language", "digested_from", "proves"]),
       file,
       err
     );
@@ -366,6 +366,17 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
         }
       }
     }
+    // Communal forests (the library) hold hr and en trees side by side —
+    // a per-tree language overrides the vault default for that tree only.
+    if (fm.language !== undefined && !["hr", "en"].includes(fm.language)) {
+      err(`${file}: language must be "hr" or "en" when present`);
+    }
+    // The canonicity pointer (spec D-007): a tree digested from a library
+    // bundle names it, so staleness against the still-canonical blog is
+    // visible rather than silent.
+    if (fm.digested_from !== undefined && (typeof fm.digested_from !== "string" || !/^(problem|proof|blog)\/[a-z0-9-]+$/.test(fm.digested_from))) {
+      err(`${file}: digested_from must be a bundle id like "blog/<slug>"`);
+    }
     if (fm.origin !== undefined && !ORIGINS.has(fm.origin)) {
       err(`${file}: origin must be "digest", "member" or "agent", got ${JSON.stringify(fm.origin)}`);
     }
@@ -397,17 +408,34 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
       }
     }
 
-    // A proof proves exactly one statement; with zero it is an orphan, with
-    // several the proved statement is ambiguous (the doc's uses-a-lemma case),
-    // so zero is an error and more than one only a warning.
-    if (fm.taxon === "proof" && isStringArray(fm.depends)) {
+    // `proves` names a proof's anchor explicitly — required knowledge the
+    // depends heuristic cannot recover once a proof leans on several
+    // statements, or proves an exercise (solutions are proofs too, but
+    // exercise stays outside PROVABLE so theorems don't fold under drills).
+    if (fm.proves !== undefined) {
+      if (fm.taxon !== "proof") {
+        err(`${file}: proves is only meaningful on proof trees`);
+      } else {
+        const target = trees.get(fm.proves)?.fm;
+        if (!target) {
+          err(`${file}: proves names unknown tree "${fm.proves}"`);
+        } else if (!PROVABLE_TAXA.has(target.taxon) && target.taxon !== "exercise") {
+          err(`${file}: proves must name a statement or exercise tree, not a ${target.taxon}`);
+        } else if (!(isStringArray(fm.depends) && fm.depends.includes(fm.proves))) {
+          err(`${file}: proves target "${fm.proves}" must also appear in depends`);
+        }
+      }
+    }
+    // Without proves, the old heuristic stands: exactly one statement-taxon
+    // dependency, or the anchor is ambiguous/absent.
+    if (fm.taxon === "proof" && fm.proves === undefined && isStringArray(fm.depends)) {
       const statements = fm.depends.filter((d) =>
         PROVABLE_TAXA.has(trees.get(d)?.fm?.taxon)
       );
       if (statements.length === 0) {
-        err(`${file}: proof tree must depend on exactly one statement tree (theorem/lemma/proposition/corollary); found none`);
+        err(`${file}: proof tree must depend on exactly one statement tree (theorem/lemma/proposition/corollary), or name its anchor with proves:; found none`);
       } else if (statements.length > 1) {
-        warn(`${file}: proof depends on ${statements.length} statement trees (${statements.join(", ")}) — ambiguous which one it proves`);
+        warn(`${file}: proof depends on ${statements.length} statement trees (${statements.join(", ")}) — add proves: to name the one it proves`);
       }
     }
 

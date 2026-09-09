@@ -122,9 +122,9 @@ function main() {
   for (const id of ids) {
     const t = trees.get(id);
     if (t.fm.taxon !== "proof") continue;
-    const stmt = (t.fm.depends ?? []).find((d) =>
-      PROVABLE.has(trees.get(d)?.fm.taxon)
-    );
+    const stmt =
+      (t.fm.proves && trees.has(t.fm.proves) ? t.fm.proves : undefined) ??
+      (t.fm.depends ?? []).find((d) => PROVABLE.has(trees.get(d)?.fm.taxon));
     if (stmt) {
       if (!proofsOf.has(stmt)) proofsOf.set(stmt, []);
       proofsOf.get(stmt).push(id);
@@ -211,6 +211,7 @@ function buildGroups(sections, trees) {
     // unfold beneath that statement; fall back to any grouped dependency.
     const deps = t.fm.depends ?? [];
     const stmt =
+      (t.fm.proves && groupOf.has(t.fm.proves) ? t.fm.proves : undefined) ??
       deps.find(
         (d) => PROVABLE.has(trees.get(d)?.fm.taxon) && groupOf.has(d)
       ) ?? deps.find((d) => groupOf.has(d));
@@ -516,6 +517,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
     depsOf[id] = (t.fm.depends ?? []).filter((d) => trees.has(d)).sort();
     nodeInfo[id] = {
       taxon: t.fm.taxon,
+      language: t.fm.language,
       title: plainTitle(t.fm.title),
       group: groups.groupOf.get(id) ?? null,
     };
@@ -953,7 +955,8 @@ function clientJs() {
     // it must match the vault, not the club's UI chrome. A member copied
     // the Croatian version into an English vault and got a Croatian
     // session about English category theory; never again.
-    return F.language === "en"
+    var lang = (F.nodes[id] && F.nodes[id].language) || F.language;
+    return lang === "en"
       ? '/tutor — check how well I understand: "' + F.nodes[id].title + '". Vault: ' + F.vaultPath + ' — keep the whole session note in English, saved under sessions/ inside this vault.'
       : '/tutor — provjeri koliko razumijem: "' + F.nodes[id].title + '". Trezor: ' + F.vaultPath + ' — cijelu sesijsku bilješku piši na hrvatskom, spremi je u sessions/ unutar trezora.';
   }

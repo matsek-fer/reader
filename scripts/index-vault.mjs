@@ -106,7 +106,8 @@ function bodyToText(md) {
 }
 
 function embedText(t) {
-  return `passage: ${t.fm.title} — ${bodyToText(t.body)}`;
+  const ann = typeof t.fm.x_annotation === "string" ? ` — ${t.fm.x_annotation}` : "";
+  return `passage: ${t.fm.title} — ${bodyToText(t.body)}${ann}`;
 }
 
 /* ---------------- index output ---------------- */
