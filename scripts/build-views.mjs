@@ -602,6 +602,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
 
   const data = {
     vaultPath: path.resolve(vaultDir),
+    language: forest.language === "en" ? "en" : "hr",
     groups: groupData.map(({ id, title, members, variants }) => ({
       id,
       title,
@@ -948,7 +949,13 @@ function clientJs() {
       : st === 'ready' ? 'spremno za čitanje' : 'nije spremno';
   }
   function testPhrase(id) {
-    return '/tutor — provjeri koliko razumijem: "' + F.nodes[id].title + '". Trezor: ' + F.vaultPath + ' — spremi sesiju u sessions/ unutar trezora.';
+    // This phrase becomes MODEL INPUT and seeds the session's language —
+    // it must match the vault, not the club's UI chrome. A member copied
+    // the Croatian version into an English vault and got a Croatian
+    // session about English category theory; never again.
+    return F.language === "en"
+      ? '/tutor — check how well I understand: "' + F.nodes[id].title + '". Vault: ' + F.vaultPath + ' — keep the whole session note in English, saved under sessions/ inside this vault.'
+      : '/tutor — provjeri koliko razumijem: "' + F.nodes[id].title + '". Trezor: ' + F.vaultPath + ' — cijelu sesijsku bilješku piši na hrvatskom, spremi je u sessions/ unutar trezora.';
   }
   function renderMarkUI(id, opts) {
     opts = opts || {};
