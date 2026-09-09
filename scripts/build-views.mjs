@@ -601,6 +601,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
     `<span class="lgsep"></span>`;
 
   const data = {
+    vaultPath: path.resolve(vaultDir),
     groups: groupData.map(({ id, title, members, variants }) => ({
       id,
       title,
@@ -947,7 +948,7 @@ function clientJs() {
       : st === 'ready' ? 'spremno za čitanje' : 'nije spremno';
   }
   function testPhrase(id) {
-    return 'provjeri koliko razumijem: ' + F.nodes[id].title;
+    return '/tutor — provjeri koliko razumijem: "' + F.nodes[id].title + '". Trezor: ' + F.vaultPath + ' — spremi sesiju u sessions/ unutar trezora.';
   }
   function renderMarkUI(id, opts) {
     opts = opts || {};
@@ -1136,6 +1137,10 @@ function buildDagMd(vault, edges, groups) {
   const { trees, forest } = vault;
   const lines = [];
   lines.push("# Graf ovisnosti");
+  lines.push("");
+  lines.push(
+    "> [!TIP] Ovo je statični Obsidian-prikaz. **Interaktivni prikaz** — sklopive cjeline, označavanje napretka (savladano / spremno / nije spremno), pretraga — je `views/forest.html`: otvori ga **u pregledniku** (dvoklik u file manageru), ne u Obsidianu."
+  );
   lines.push("");
   lines.push(
     "Bridovi su `depends` veze: strelica vodi od preduvjeta prema stablu",

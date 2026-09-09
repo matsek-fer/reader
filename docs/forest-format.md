@@ -341,6 +341,15 @@ produces a vault that is legally *theirs to use and nobody's to
 redistribute*, and the format makes that boundary machine-visible
 (`derivative`, `notice`) instead of relying on memory.
 
+## `sessions/` — the member's workspace in the same vault
+
+A vault may hold a `sessions/` folder for tutor sessions ABOUT this work
+(`sessions/<slug>/state.json` + `session.md`, the AI_instructor format).
+Tooling ignores it entirely — the validator, views and index read only
+`forest.json`, `trees/`, `index.md`, `views/` — but Obsidian shows it, so
+studying and being tutored happen in ONE vault window. Session notes are
+the member's own and stay local like everything else here.
+
 ## The retrieval index: `index/`
 
 `scripts/index-vault.mjs` derives `index/index.json` (schema
