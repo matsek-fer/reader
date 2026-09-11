@@ -1,18 +1,19 @@
 # reader — the MatSek Knowledge Forest
 
-Ovdje raste **Šuma znanja** Matematičke sekcije: alat koji knjigu, članak
-ili bilješke *probavi* u šumu malih, samostalno čitljivih objekata —
-definicija, teorema, dokaza, primjera — povezanih grafom preduvjeta.
-Umjesto da knjigu čitaš od korice do korice, šumom hodaš onim redom koji
-tvoji preduvjeti dopuštaju; tutor istim stablima zna postaviti pitanje.
-Probavi → uči → uzgajaj.
+This is where the Mathematics Section's **Knowledge Forest** grows: a tool
+that *digests* a book, a paper or lecture notes into a forest of small,
+independently readable objects — definitions, theorems, proofs, examples —
+linked by a graph of prerequisites. Instead of reading a book cover to
+cover, you walk the forest in whatever order your prerequisites allow, and
+the tutor can ask you about the same trees. Digest → learn → grow.
 
-In English: this repo is the home of the Knowledge Forest — the pipeline
-that digests a work into a **vault** of addressable teaching objects
-(**trees**), stores it locally, and lets a reader or tutor walk the
-dependency DAG instead of the page order. The earlier "standalone paper
-reader" idea grew into this; selecting-and-asking over a source becomes
-one step of digestion rather than the product.
+Concretely, this repo is the home of the pipeline that digests a work into
+a **vault** of addressable teaching objects (**trees**), stores it locally,
+and lets a reader or tutor walk the dependency DAG instead of the page
+order. The earlier "standalone paper reader" idea grew into this;
+selecting-and-asking over a source becomes one step of digestion rather
+than the product. The member-facing guide to the whole toolset is on the
+[organisation profile](https://github.com/matsek-fer).
 
 ## The pieces
 
@@ -20,12 +21,12 @@ one step of digestion rather than the product.
 |---|---|---|
 | Vault format | The on-disk contract: `forest.json`, `trees/`, `index.md`, `views/` — [docs/forest-format.md](docs/forest-format.md) | **Draft 0.1, normative** |
 | Reference vault | A real CC BY vault built from the library's Lagrange material — [examples/mini-vault/](examples/mini-vault/) | **Done, 12 trees** |
-| Digester | The skill that turns a source into a vault (slice 1) | In progress |
+| Digester | The skill that turns a source into a vault — [skills/digest/](skills/digest/SKILL.md) (slice 1) | **Done** |
 | Vault search | Hybrid retrieval over a vault's trees — `scripts/index-vault.mjs` writes `index/` per the library's D-003 embedding convention, `scripts/search-vault.mjs` fuses lexical + semantic (slice 2) | **Done** |
 | Ask skill | A studying member's question, answered from the vault first with clickable tree ids — [skills/ask/](skills/ask/SKILL.md) (slice 2) | **Done** |
 | Grow skill | A member's own trees become library bundles, through the provenance firewall — `scripts/grow-bundle.mjs` + [skills/grow/](skills/grow/SKILL.md) (slice 3) | **Done** |
-| Forest reader | Walks vaults by prerequisite instead of page order | Planned |
-| Tutor integration | Probe a statement, withhold its proof, ask for it | Planned |
+| Forest view | `views/forest.html` — an interactive map of the vault with readiness states, built by `scripts/build-views.mjs`; a custom highlight-and-ask UI (slice 4) | **View done**, UI planned |
+| Tutor integration | `/tutor` sessions live inside the vault (`sessions/`); the view's self-check prompt hands a tree to the tutor | **Done** |
 | Spec promotion | Format hardened into the `spec` repo once stable | When the Forest stabilizes |
 
 Obsidian is the interim UI — every vault renders there by construction
