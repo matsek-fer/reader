@@ -23,7 +23,33 @@ fs.mkdirSync(treesDir, { recursive: true });
 const read = (f) => fs.readFileSync(f, "utf8").trim();
 const yq = (s) => JSON.stringify(s); // YAML-safe double-quoted scalar for our charset
 
+// Re-running the bootstrap must not destroy hand-wiring. Mechanical fields are
+// re-derived from the bundle; the graph edges and any tool-private keys a
+// digestion added afterwards are the forest's work, not this script's, and are
+// carried over. Found the hard way: the first blog digestion attached six
+// edges to converted trees that a second bootstrap run would have erased.
+const MECHANICAL = new Set(["id", "taxon", "title", "teaches", "requires", "language", "digested_from", "standalone", "x_annotation"]);
+let preserved = 0;
+function existingFrontmatter(id) {
+  const f = path.join(treesDir, `${id}.md`);
+  if (!fs.existsSync(f)) return null;
+  const m = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(f, "utf8"));
+  return m ? load(m[1]) ?? {} : null;
+}
+
 function treeFile(id, fm, body) {
+  const prior = existingFrontmatter(id);
+  if (prior) {
+    let kept = false;
+    for (const [k, v] of Object.entries(prior)) {
+      const mechanicalDefault = k === "depends" && Array.isArray(fm.depends) && fm.depends.length === 0;
+      if (!MECHANICAL.has(k) || mechanicalDefault) {
+        if (JSON.stringify(fm[k]) !== JSON.stringify(v)) kept = true;
+        fm[k] = v;
+      }
+    }
+    if (kept) preserved++;
+  }
   const lines = ["---"];
   for (const [k, v] of Object.entries(fm)) {
     if (v === undefined) continue;
@@ -92,4 +118,4 @@ idx = idx.includes(BEGIN)
   ? idx.slice(0, idx.indexOf(BEGIN)) + block + idx.slice(idx.indexOf(END) + END.length)
   : idx.trimEnd() + "\n\n" + block + "\n";
 fs.writeFileSync(indexPath, idx);
-console.log(`bundle-to-trees: ${made.length} tree(s) from ${made.length / 2} bundle(s)`);
+console.log(`bundle-to-trees: ${made.length} tree(s) from ${made.length / 2} bundle(s)` + (preserved ? `; preserved hand-added frontmatter on ${preserved}` : ""));
