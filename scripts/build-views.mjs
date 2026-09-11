@@ -580,7 +580,8 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
         `<rect class="grp-box"/>` +
         `<g class="grp-header" data-g="${g.id}"><rect class="grp-hrect"/>` +
         `<text class="grp-arrow" x="12" y="${HEADER_H / 2 + 5}">▸</text>` +
-        `<text class="grp-title" x="30" y="${HEADER_H / 2 + 5}">${escapeHtml(g.title)}</text>` +
+        `<text class="grp-title" x="30" y="${HEADER_H / 2 + 5}" data-full="${escapeHtml(g.title)}">${escapeHtml(g.title)}</text>` +
+        `<title>${escapeHtml(g.title)}</title>` +
         `<text class="grp-count" x="0" y="${HEADER_H / 2 + 5}">${g.members.length} stabala</text>` +
         `</g><g class="grp-content">${nodes}</g></g>`
       );
@@ -795,6 +796,7 @@ function clientJs() {
       el.querySelector('.grp-arrow').textContent = open ? '▾' : '▸';
       el.querySelector('.grp-count').setAttribute('x', w - 12);
       el.querySelector('.grp-count').setAttribute('text-anchor', 'end');
+      fitGroupTitle(g.id, w);
       var content = el.querySelector('.grp-content');
       content.setAttribute('transform', 'translate(' + G.PAD + ',' + (G.HEADER_H + G.PAD) + ')');
       content.style.display = open ? '' : 'none';
@@ -854,6 +856,33 @@ function clientJs() {
       'Napredak se ne može trajno spremiti — vrijedi samo dok je stranica otvorena.';
   }
 
+  // The count text ("12/21 savladano") is right-anchored at the bar's edge and
+  // the title left-anchored at x=30; on a collapsed 380px bar a long group
+  // name would run straight through it. getComputedTextLength is the only
+  // honest measure of SVG text, so trim against it and keep the full name in
+  // the <title> tooltip.
+  function fitGroupTitle(gid, w) {
+    var el = document.getElementById('grp-' + gid);
+    if (!el) return;
+    var titleEl = el.querySelector('.grp-title');
+    var countEl = el.querySelector('.grp-count');
+    var full = titleEl.getAttribute('data-full') || titleEl.textContent;
+    var countW = 0;
+    try { countW = countEl.getComputedTextLength(); } catch (e) { return; }
+    // 30 = title x, 12 = right padding, 14 = gap the eye needs between them.
+    var avail = w - 12 - countW - 14 - 30;
+    titleEl.textContent = full;
+    if (avail <= 0) { titleEl.textContent = ''; return; }
+    if (titleEl.getComputedTextLength() <= avail) return;
+    var lo = 0, hi = full.length;
+    while (lo < hi) {
+      var mid = Math.ceil((lo + hi) / 2);
+      titleEl.textContent = full.slice(0, mid).trimEnd() + '…';
+      if (titleEl.getComputedTextLength() <= avail) lo = mid; else hi = mid - 1;
+    }
+    titleEl.textContent = lo > 0 ? full.slice(0, lo).trimEnd() + '…' : '…';
+  }
+
   function applyStates() {
     document.querySelectorAll('.node').forEach(function (n) {
       var st = stateOf(n.getAttribute('data-id'));
@@ -871,6 +900,7 @@ function clientJs() {
       var el = document.getElementById('grp-' + g.id);
       el.querySelector('.grp-count').textContent =
         nDone + '/' + g.members.length + ' savladano';
+      fitGroupTitle(g.id, frames[g.id] ? frames[g.id].w : G.COLLAPSED_W);
       // The state outline belongs to the collapsed bar; an open group
       // shows its members' own outlines instead.
       var closed = frames[g.id] ? !frames[g.id].open : true;
