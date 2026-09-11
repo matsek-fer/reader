@@ -80,7 +80,7 @@ Field by field:
 | `source.pages` | string | Page range digested, e.g. `"1-374"` or `"120-158"`. Optional when `source.file` is absent. |
 | `language` | string | `hr` or `en` — the language of the tree bodies. One vault, one language: a mixed-language source is re-authored uniformly. |
 | `created` | string | ISO date `YYYY-MM-DD` of the digest. |
-| `tool` | string | `"forest-digest"` — the producing tool. |
+| `tool` | string | `"forest-digest"` — the producing tool.  Currently `forest-digest` (the digester) or `matsek-library-export` (a vault exported from the library site); a vault must not claim a producer that did not make it. |
 | `tool_version` | string | The tool's version, e.g. `"0.1.0"`. |
 | `derivative` | boolean | `true` iff the vault's content is a derivative work of a source the member does not hold redistribution rights to. See [Copyright](#copyright--the-hard-rules). |
 | `notice` | string | **Required iff `derivative` is `true`**, and then exactly `"LOKALNO — izvedeno djelo, ne šalje se u knjižnicu"`. Forbidden otherwise — a non-derivative vault carrying the notice signals a confused provenance claim, the same way a stray `adapted_from` does in bundle v1. |

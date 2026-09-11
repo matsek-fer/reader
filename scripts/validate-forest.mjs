@@ -235,8 +235,10 @@ function checkForestJson(vaultDir, err) {
   if (typeof forest.created !== "string" || !DATE.test(forest.created)) {
     err(`${ctx}: created must be an ISO date YYYY-MM-DD`);
   }
-  if (forest.tool !== "forest-digest") {
-    err(`${ctx}: tool must be exactly "forest-digest"`);
+  // Producers of a vault, not a free-text field: an export is not a digest
+  // and must not claim to be one, but it is still a vault.
+  if (!["forest-digest", "matsek-library-export"].includes(forest.tool)) {
+    err(`${ctx}: tool must be one of "forest-digest", "matsek-library-export"`);
   }
   if (typeof forest.tool_version !== "string" || forest.tool_version.length === 0) {
     err(`${ctx}: tool_version must be a non-empty string`);
