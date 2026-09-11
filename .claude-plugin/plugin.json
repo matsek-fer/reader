@@ -1,6 +1,6 @@
 {
   "name": "forest",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The MatSek Knowledge Forest digester: turn a book, paper or notes into a local vault of standalone teaching trees — definitions, theorems, separate proofs — wired into a prerequisite DAG and rendered in Obsidian. Derivative vaults stay local; provenance is machine-visible, and only a member's own trees may grow back into library bundles.",
   "author": {
     "name": "Matematička sekcija FER",

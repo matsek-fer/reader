@@ -310,7 +310,7 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
     const { file, stem, fm, body } = t;
     checkKeys(
       fm,
-      new Set(["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin", "language", "digested_from", "proves"]),
+      new Set(["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin", "language", "digested_from", "proves", "adapted_from"]),
       file,
       err
     );
@@ -374,6 +374,12 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
     // The canonicity pointer (spec D-007): a tree digested from a library
     // bundle names it, so staleness against the still-canonical blog is
     // visible rather than silent.
+    // Attribution for a tree adapted from a named CC BY-or-freer work,
+    // same meaning as bundle spec v1's field: a free-text citation, not an
+    // id, because the source lives outside every registry we control.
+    if (fm.adapted_from !== undefined && (typeof fm.adapted_from !== "string" || fm.adapted_from.trim() === "")) {
+      err(`${file}: adapted_from must be a non-empty citation string`);
+    }
     if (fm.digested_from !== undefined && (typeof fm.digested_from !== "string" || !/^(problem|proof|blog)\/[a-z0-9-]+$/.test(fm.digested_from))) {
       err(`${file}: digested_from must be a bundle id like "blog/<slug>"`);
     }
