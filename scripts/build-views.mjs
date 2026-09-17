@@ -35,6 +35,7 @@ import { createRequire } from "node:module";
 import yaml from "js-yaml";
 import katex from "katex";
 import { marked } from "marked";
+import { renderBody as renderBodyShared, renderMath as renderMathShared } from "./lib/render.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -370,46 +371,11 @@ function layoutGroup(memberIds, trees, edges, proofsOf, { showExr, showPrf }) {
 
 // -------------------------------------------------------------- markdown/math
 
-function renderMath(tex, displayMode) {
-  try {
-    return katex.renderToString(tex, {
-      displayMode,
-      throwOnError: false,
-      output: "html",
-    });
-  } catch {
-    return escapeHtml(displayMode ? `$$${tex}$$` : `$${tex}$`);
-  }
-}
-
-// Protect math from marked, turn wikilinks into panel-opening anchors,
-// then let marked do the rest and splice the KaTeX back in.
+const renderMath = renderMathShared;
+// Delegates to the shared renderer; `trees` here is a Map, the shared
+// function takes a membership predicate.
 function renderBody(body, trees) {
-  const chunks = [];
-  const stash = (html) => {
-    chunks.push(html);
-    return `%%KTX${chunks.length - 1}%%`;
-  };
-  let text = body.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) =>
-    stash(renderMath(tex.trim(), true))
-  );
-  // Inline math survives a hard line-wrap (digest bodies wrap ~72 cols) —
-  // but a blank line still terminates, so an unpaired $ can't eat a paragraph.
-  text = text.replace(/(^|[^\\$])\$((?:[^$\n]|\n(?!\n))+?)\$/g, (m, pre, tex) =>
-    pre + stash(renderMath(tex.replace(/\n/g, " "), false))
-  );
-  text = text.replace(WIKILINK, (_, target, label) => {
-    target = target.trim();
-    const t = trees.get(target);
-    const shown = label ?? (t ? target : target);
-    if (!t) return escapeHtml(shown);
-    return stash(
-      `<a href="#" class="treelink" data-open="${escapeHtml(target)}">${escapeHtml(shown)}</a>`
-    );
-  });
-  let html = marked.parse(text, { async: false });
-  html = html.replace(/%%KTX(\d+)%%/g, (_, i) => chunks[Number(i)]);
-  return html;
+  return renderBodyShared(body, (id) => trees.has(id));
 }
 
 function renderTitle(title) {
@@ -708,6 +674,20 @@ svg { width: 100%; height: 100%; display: block; }
 #footer button:hover { color: var(--fg); }
 #storage-note { color: #e0a458; }
 #panel-mark { margin: 12px 0 14px; }
+#panel-ask { margin: 14px 0 18px; padding: 10px 12px; border: 1px solid var(--line, #444); border-radius: 8px; background: var(--card, rgba(255,255,255,.04)); }
+#panel-ask textarea { width: 100%; min-height: 64px; box-sizing: border-box; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line, #444); background: transparent; color: inherit; resize: vertical; }
+#panel-ask .ask-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+#panel-ask .ask-sel { font-size: 12px; color: var(--fg-muted, #999); font-style: italic; margin-top: 6px; max-height: 3.2em; overflow: hidden; }
+#panel-ask .ask-status { font-size: 12px; color: var(--fg-muted, #999); }
+#panel-ask .ask-status.err { color: #e07a6a; }
+#panel-ask .ask-answer { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line, #444); font-size: 14px; line-height: 1.55; }
+#panel-ask .ask-answer p { margin: .5em 0; }
+#panel-ask .ask-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+#panel-ask button { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line, #444); background: transparent; color: inherit; cursor: pointer; }
+#panel-ask button.primary { background: var(--accent, #4a8fe7); border-color: transparent; color: #fff; }
+#panel-ask button:disabled { opacity: .5; cursor: default; }
+#bridge-pill { position: fixed; right: 14px; bottom: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line, #444); background: var(--card, rgba(0,0,0,.6)); color: var(--fg-muted, #aaa); z-index: 30; }
+#bridge-pill.on { color: #7fd18a; border-color: #7fd18a; }
 .mark-btn { background: var(--card); color: var(--fg); border: 1px solid var(--st-ready); border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
 .mark-btn:hover { background: var(--card-hi); }
 .mark-btn.is-done { border-color: var(--border); color: var(--fg-muted); }
@@ -968,6 +948,7 @@ function clientJs() {
     var head = panelBody.querySelector('.panel-head');
     if (head) head.after(markBox); else panelBody.prepend(markBox);
     renderMarkUI(id);
+    if (BRIDGE.on) mountAsk(id);
     panel.classList.add('open');
     panel.scrollTop = 0;
   }
@@ -1164,6 +1145,133 @@ function clientJs() {
   view.k = Math.min(1, (r.width - 40) / (maxW + 40));
   view.x = 20; view.y = topbarH + 12;
   applyView();
+
+  // ---- the bridge: served-mode only ---------------------------------------
+  // Under file:// there is no server and nothing here runs. Served from
+  // serve-vault.mjs, the URL carries a per-launch token; the page never
+  // stores it anywhere but memory.
+  var BRIDGE = (function () {
+    var tok = new URLSearchParams(location.search).get('t');
+    return { on: location.protocol === 'http:' && !!tok, tok: tok };
+  })();
+  var askBox = document.createElement('div');
+  askBox.id = 'panel-ask';
+  var askTree = null, askSelection = '', askLastId = null;
+
+  function api(pathname, opts) {
+    opts = opts || {};
+    return fetch(pathname, {
+      method: opts.method || 'GET',
+      headers: Object.assign({ 'X-Forest-Token': BRIDGE.tok }, opts.body ? { 'content-type': 'application/json' } : {}),
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    }).then(function (r) { return r.json(); });
+  }
+
+  function mountAsk(id) {
+    askTree = id; askSelection = ''; askLastId = null;
+    askBox.innerHTML =
+      '<textarea id="ask-q" placeholder="Označi dio teksta gore i pitaj — ili samo pitaj o ovom stablu."></textarea>' +
+      '<div class="ask-sel" id="ask-sel"></div>' +
+      '<div class="ask-row"><button class="primary" id="ask-send">Pitaj</button>' +
+      '<button id="ask-tutor" title="Pokreni /tutor provjeru u Claude Codeu">Provjeri me u tutoru</button>' +
+      '<span class="ask-status" id="ask-status"></span></div>' +
+      '<div class="ask-answer" id="ask-answer" hidden></div>' +
+      '<div class="ask-actions" id="ask-actions" hidden></div>';
+    markBox.after(askBox);
+    document.getElementById('ask-send').onclick = function () { sendAsk('ask'); };
+    document.getElementById('ask-tutor').onclick = function () { sendAsk('tutor'); };
+  }
+
+  // The highlighted passage IS the question's context: capture it from the
+  // panel body only, so a stray selection elsewhere on the page never leaks in.
+  document.addEventListener('selectionchange', function () {
+    if (!BRIDGE.on || !askBox.isConnected) return;
+    var s = window.getSelection();
+    var txt = s && s.toString().trim();
+    if (!txt) return;
+    var anchor = s.anchorNode && (s.anchorNode.nodeType === 3 ? s.anchorNode.parentElement : s.anchorNode);
+    if (!anchor || !panelBody.contains(anchor) || askBox.contains(anchor)) return;
+    askSelection = txt.slice(0, 4000);
+    var el = document.getElementById('ask-sel');
+    if (el) el.textContent = '„' + (txt.length > 160 ? txt.slice(0, 160) + '…' : txt) + '”';
+  });
+
+  function setStatus(msg, err) {
+    var el = document.getElementById('ask-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('err', !!err);
+  }
+
+  function sendAsk(kind, replyTo) {
+    var q = (document.getElementById('ask-q') || {}).value || '';
+    if (kind === 'ask' && !q.trim()) { setStatus('Napiši pitanje.', true); return; }
+    var btns = askBox.querySelectorAll('button');
+    btns.forEach(function (b) { b.disabled = true; });
+    setStatus('Šaljem…');
+    api('/api/ask', { method: 'POST', body: { kind: kind, tree: askTree, selection: askSelection, question: q, reply_to: replyTo || null } })
+      .then(function (r) {
+        if (r.error) throw new Error(r.error);
+        askLastId = r.id;
+        if (!r.watcher.alive) setStatus('Čekam Claude Code — pokreni /ask --watch u trezoru.');
+        else setStatus(kind === 'tutor' ? 'Tutor se pokreće u terminalu…' : 'Razmišljam…');
+        listen(r.id, kind);
+      })
+      .catch(function (e) { setStatus('Greška: ' + e.message, true); btns.forEach(function (b) { b.disabled = false; }); });
+  }
+
+  function listen(id, kind) {
+    var es = new EventSource('/api/answer/' + id + '?t=' + encodeURIComponent(BRIDGE.tok));
+    var ans = document.getElementById('ask-answer');
+    var acts = document.getElementById('ask-actions');
+    es.addEventListener('watcher', function (ev) {
+      var w = JSON.parse(ev.data);
+      if (!w.alive) setStatus('Čekam Claude Code — pokreni /ask --watch u trezoru.');
+    });
+    es.addEventListener('status', function (ev) {
+      var st = JSON.parse(ev.data);
+      if (st.state === 'error') setStatus('Greška: ' + (st.message || 'nepoznata'), true);
+      else if (st.message) setStatus(st.message);
+      else if (st.state === 'writing') setStatus('Pišem stablo…');
+      else setStatus('Razmišljam…');
+    });
+    es.addEventListener('answer', function (ev) {
+      var a = JSON.parse(ev.data);
+      ans.hidden = false; ans.innerHTML = a.html;
+      acts.hidden = false; acts.innerHTML = '';
+      setStatus('');
+      if (a.trees_added && a.trees_added.length) {
+        // The forest on disk changed under us: the server hands out the
+        // rebuilt page, so a reload is how the new tree appears.
+        var b = document.createElement('button'); b.className = 'primary';
+        b.textContent = 'Novo stablo: ' + a.trees_added.join(', ') + ' — osvježi';
+        b.onclick = function () { location.reload(); };
+        acts.appendChild(b);
+      } else if (kind === 'ask' && /\bponud|\boffer|\buzgoj|\bgrow\b/i.test(a.markdown)) {
+        var g = document.createElement('button');
+        g.textContent = 'Da, uzgoji to u stablo';
+        g.onclick = function () { sendAsk('grow', id); };
+        acts.appendChild(g);
+      }
+    });
+    es.addEventListener('done', function () {
+      es.close();
+      askBox.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+    });
+    es.onerror = function () { es.close(); setStatus('Veza prekinuta.', true); askBox.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); };
+  }
+
+  if (BRIDGE.on) {
+    var pill = document.createElement('div'); pill.id = 'bridge-pill';
+    document.body.appendChild(pill);
+    var poll = function () {
+      api('/api/state').then(function (s) {
+        pill.classList.toggle('on', !!s.watcher.alive);
+        pill.textContent = s.watcher.alive ? '● Claude Code spojen' : '○ Claude Code nije spojen — /ask --watch';
+      }).catch(function () { pill.textContent = '○ most nedostupan'; pill.classList.remove('on'); });
+    };
+    poll(); setInterval(poll, 5000);
+  }
 })();`;
 }
 

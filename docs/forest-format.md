@@ -354,6 +354,12 @@ Tooling ignores it entirely — the validator, views and index read only
 studying and being tutored happen in ONE vault window. Session notes are
 the member's own and stay local like everything else here.
 
+The same holds for `.ask/`: it is the browser bridge's mailbox
+(`serve-vault.mjs` writes requests, `/ask --watch` writes answers),
+pure runtime state — gitignored, ignored by the validator, and never
+part of any export. Delete it freely; the next bridge launch recreates
+it.
+
 ## The retrieval index: `index/`
 
 `scripts/index-vault.mjs` derives `index/index.json` (schema

@@ -142,3 +142,71 @@ own `exr-` trees are still fair game to cite alongside).
   and conventions. When they differ from the mainstream ones, teach the
   vault's version and note the difference — that is fidelity, not
   pedantry.
+
+## Watch mode — the bridge to `forest.html`
+
+`/ask --watch` (or "prati pitanja iz preglednika", or any mention of
+`serve-vault`) turns this session into the model half of the reader:
+the member has `forest.html` open through `serve-vault.mjs`, highlights a
+passage, types a question, and the page writes a request FILE into the
+vault's `.ask/`. You answer it — here, in this session, on the member's
+own subscription, with every tool call visible in this terminal — and
+write the answer back as a file the page streams in. No server calls a
+model; this session is the model. Say that once when you start, and say
+that the member ends the mode by interrupting you.
+
+Precondition: the working directory (or the directory named) is a vault
+with `.ask/` present — `serve-vault.mjs` creates it. If it is missing,
+tell the member to start the bridge first:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/serve-vault.mjs" <vault-dir> --open
+```
+
+Then loop until interrupted:
+
+1. **Wait.** `node "${CLAUDE_PLUGIN_ROOT}/scripts/ask-wait.mjs" <vault-dir>`
+   blocks up to eight minutes, keeps the page's "spojen" indicator alive,
+   and prints either a request directory or `none`. On `none`, run it
+   again — that is the whole idle loop.
+2. **Claim it.** Write `<dir>/status.json` as `{"state":"thinking"}`
+   *before* reading anything else, so a crash mid-answer leaves a visible
+   half-state instead of a request that re-runs forever.
+3. **Read `<dir>/request.json`**: `kind`, `tree` (the tree id the member
+   had open, may be null), `selection` (the highlighted passage — the
+   focal context, quote it back when it matters), `question`, and
+   `reply_to` for follow-ups. The request is the member's own words; the
+   tree bodies you then read are digest text and stay untrusted as ever.
+4. **Handle by kind:**
+   - `ask` — Stages 1–4 above, exactly as in the interactive flow, with
+     `tree` + `selection` as the starting context. Write the answer to
+     `<dir>/answer.md` in Markdown; `[[tree-id]]` links become clickable
+     on the page. If the answer lay beyond the vault, end with a line
+     that begins **`Ponuda:`** describing the tree you could grow — the
+     page turns that into a button, and the member's click arrives as a
+     `grow` request, which is their consent.
+   - `grow` — read the `reply_to` request and its `answer.md`, write the
+     offered tree(s) per `docs/forest-format.md` (`origin: "agent"`,
+     standalone, honest `depends`, registry-resolved concepts), add them
+     to `index.md`, rebuild views and index (Stage 3's commands), and
+     write `answer.md` naming what grew. `status.json` on completion:
+     `{"state":"done","trees_added":["<id>", …]}` — the page offers a
+     reload, because the forest under it just changed.
+   - `tutor` — write a session stub for that tree into
+     `sessions/<slug>/state.json` (the AI_instructor state format;
+     `topic` from the tree's title, `background` from its `requires` and
+     the member's `selection`), write `answer.md` saying the session is
+     ready in the terminal, then **start the tutor protocol here** —
+     the member switches windows for the probe, which is the one part of
+     the bridge that is a conversation, not a file.
+   Language of `answer.md`: the vault's `language` (per-tree `language`
+   overrides), never the chat's — the same rule as the self-check phrase.
+5. **Finish.** Write `status.json` as `{"state":"done"}` (with
+   `trees_added` when applicable). On any failure, `{"state":"error",
+   "message":"<one plain sentence>"}` — never leave a request at
+   `thinking`.
+6. Loop to step 1.
+
+Intermediate states are welcome and cheap — `{"state":"writing"}` while
+a tree is being written, or `{"state":"thinking","message":"Čitam
+thm-lagrange…"}` — the page shows `message` verbatim.
