@@ -28,6 +28,7 @@ than the product. The member-facing guide to the whole toolset is on the
 | Forest view | `views/forest.html` — an interactive map of the vault with readiness states, built by `scripts/build-views.mjs` | **Done** |
 | The bridge | Highlight-and-ask in the browser: `scripts/serve-vault.mjs` relays question/answer files between the page and the member's own Claude Code running `/ask --watch` (slice 4) | **Done** |
 | Tutor integration | `/tutor` sessions live inside the vault (`sessions/`); the view's self-check prompt hands a tree to the tutor | **Done** |
+| Browser tutor | `/forest:tutor` — the tutor asks and grades inside `forest.html`'s side panel through the bridge; a three-question stub stands in for the real tutor — [skills/tutor/](skills/tutor/SKILL.md) | **Phase 0, experimental** |
 | Spec promotion | Format hardened into the `spec` repo once stable | When the Forest stabilizes |
 
 Obsidian is the interim UI — every vault renders there by construction
@@ -72,6 +73,23 @@ prompts — is the only thing that calls a model.
 Everything the bridge exchanges sits in `<vault>/.ask/` as plain files
 you can read; it is runtime state, gitignored, never part of the format
 or any export.
+
+### Tutor u pregledniku (Phase 0, experimental)
+
+One command replaces the two terminals above: in the vault, `claude`,
+then `/forest:tutor`. The skill starts the bridge — or reuses a running
+one, found through `.ask/server.json` — opens the page, and stays in
+watch mode answering everything the page sends. In the page, open a
+tree and click *Pokreni tutora* in the side panel: the tutor asks three
+questions there, one at a time, grades each answer you type (30–90 s per
+turn — every turn is a Claude Code turn), and keeps running notes under
+*Bilješke*, stored in `sessions/<slug>/notes.md`. *Pauza* writes down
+where you stopped; closing the tab loses nothing, and a reload resumes
+the same session. The bridge outlives the Claude Code session so the
+next `/forest:tutor` can reuse it; `.ask/server.json` holds its pid when
+you want it gone. This is a stub: a fixed script about orbits and
+stabilizers (or Lagrange's theorem, if that tree is open) exists only to
+test the plumbing, and the real tutor arrives with Phase 3.
 
 ## Copyright, up front
 

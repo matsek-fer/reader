@@ -1,3 +1,4 @@
 node_modules/
 .model-cache/
 .ask/
+examples/mini-vault/sessions/

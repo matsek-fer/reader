@@ -348,11 +348,15 @@ redistribute*, and the format makes that boundary machine-visible
 ## `sessions/` — the member's workspace in the same vault
 
 A vault may hold a `sessions/` folder for tutor sessions ABOUT this work
-(`sessions/<slug>/state.json` + `session.md`, the AI_instructor format).
-Tooling ignores it entirely — the validator, views and index read only
-`forest.json`, `trees/`, `index.md`, `views/` — but Obsidian shows it, so
-studying and being tutored happen in ONE vault window. Session notes are
-the member's own and stay local like everything else here.
+(`sessions/<slug>/state.json` + `notes.md`, written by the tutor skill).
+The validator, views and index ignore it — they read only `forest.json`,
+`trees/`, `index.md`, `views/` — and the bridge (`serve-vault.mjs`) only
+reads `state.json` and `notes.md` from a session directory, never writes
+them, to show a browser-tutor session in `forest.html`; the format of
+those two files belongs to the tutor skill, not to this spec. Obsidian
+shows the folder too, so studying and being tutored happen in ONE vault
+window. Session notes are the member's own and stay local like
+everything else here.
 
 The same holds for `.ask/`: it is the browser bridge's mailbox
 (`serve-vault.mjs` writes requests, `/ask --watch` writes answers),

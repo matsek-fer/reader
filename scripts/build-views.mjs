@@ -591,6 +591,13 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf) {
       (forest.source?.title ?? "") +
       "|" +
       (forest.created ?? ""),
+    // The tutor session's slug is remembered under the same pair, so a
+    // reload or a second tab of this vault resumes the same conversation.
+    sessionKey:
+      "forest-session:" +
+      (forest.source?.title ?? "") +
+      "|" +
+      (forest.created ?? ""),
   };
   const dataJson = JSON.stringify(data).replace(/</g, "\\u003c");
   const contentJson = JSON.stringify(contentHtml).replace(/</g, "\\u003c");
@@ -674,18 +681,35 @@ svg { width: 100%; height: 100%; display: block; }
 #footer button:hover { color: var(--fg); }
 #storage-note { color: #e0a458; }
 #panel-mark { margin: 12px 0 14px; }
-#panel-ask { margin: 14px 0 18px; padding: 10px 12px; border: 1px solid var(--line, #444); border-radius: 8px; background: var(--card, rgba(255,255,255,.04)); }
-#panel-ask textarea { width: 100%; min-height: 64px; box-sizing: border-box; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line, #444); background: transparent; color: inherit; resize: vertical; }
-#panel-ask .ask-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+#panel-ask, #panel-tutor { margin: 14px 0 18px; padding: 10px 12px; border: 1px solid var(--line, #444); border-radius: 8px; background: var(--card, rgba(255,255,255,.04)); }
+#panel-ask textarea, #panel-tutor textarea { width: 100%; min-height: 64px; box-sizing: border-box; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line, #444); background: transparent; color: inherit; resize: vertical; }
+#panel-ask .ask-row, #panel-tutor .ask-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 #panel-ask .ask-sel { font-size: 12px; color: var(--fg-muted, #999); font-style: italic; margin-top: 6px; max-height: 3.2em; overflow: hidden; }
-#panel-ask .ask-status { font-size: 12px; color: var(--fg-muted, #999); }
-#panel-ask .ask-status.err { color: #e07a6a; }
+#panel-ask .ask-status, #panel-tutor .ask-status { font-size: 12px; color: var(--fg-muted, #999); }
+#panel-ask .ask-status.err, #panel-tutor .ask-status.err { color: #e07a6a; }
 #panel-ask .ask-answer { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line, #444); font-size: 14px; line-height: 1.55; }
 #panel-ask .ask-answer p { margin: .5em 0; }
 #panel-ask .ask-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
-#panel-ask button { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line, #444); background: transparent; color: inherit; cursor: pointer; }
-#panel-ask button.primary { background: var(--accent, #4a8fe7); border-color: transparent; color: #fff; }
-#panel-ask button:disabled { opacity: .5; cursor: default; }
+#panel-ask button, #panel-tutor button { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line, #444); background: transparent; color: inherit; cursor: pointer; }
+#panel-ask button.primary, #panel-tutor button.primary { background: var(--accent, #4a8fe7); border-color: transparent; color: #fff; }
+#panel-ask button:disabled, #panel-tutor button:disabled { opacity: .5; cursor: default; }
+#panel-tutor .tutor-head { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 8px; }
+#panel-tutor .tutor-hint { font-size: 12px; color: var(--fg-muted); margin-top: 8px; }
+#panel-tutor .tutor-reply { font-size: 14px; line-height: 1.55; margin-bottom: 10px; }
+#panel-tutor .tutor-reply p { margin: .5em 0; }
+#panel-tutor .tutor-note { font-size: 12px; color: #e0a458; margin: 6px 0 10px; }
+#panel-tutor details { margin-top: 12px; border-top: 1px dashed var(--line, #444); padding-top: 8px; }
+#panel-tutor summary { cursor: pointer; font-size: 12px; color: var(--fg-muted); user-select: none; }
+#panel-tutor .tutor-notes { max-height: 280px; overflow-y: auto; margin-top: 8px; padding-right: 4px; font-size: 13px; line-height: 1.5; }
+#panel-tutor .tutor-notes h1 { font-size: 14px; margin: 6px 0; }
+#panel-tutor .tutor-notes h2 { font-size: 13px; margin: 10px 0 4px; }
+#panel-tutor .tutor-notes p { margin: 4px 0; }
+#panel-tutor .tutor-notes blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--border); color: var(--fg-muted); }
+/* The model's "show": focus outlined white, the rest lit in the accent; both
+   override the dimming of an unready node. */
+.node.show-lit rect:first-of-type { stroke: var(--accent); stroke-width: 2; fill: var(--card-hi); }
+.node.show-focus rect:first-of-type { stroke: var(--fg); stroke-width: 2.4; }
+.node.show-lit, .node.show-focus { opacity: 1; }
 #bridge-pill { position: fixed; right: 14px; bottom: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line, #444); background: var(--card, rgba(0,0,0,.6)); color: var(--fg-muted, #aaa); z-index: 30; }
 #bridge-pill.on { color: #7fd18a; border-color: #7fd18a; }
 .mark-btn { background: var(--card); color: var(--fg); border: 1px solid var(--st-ready); border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
@@ -1154,6 +1178,7 @@ function clientJs() {
     var tok = new URLSearchParams(location.search).get('t');
     return { on: location.protocol === 'http:' && !!tok, tok: tok };
   })();
+  var ASK_WAIT = 'Čekam Claude Code — pokreni /ask --watch u trezoru.';
   var askBox = document.createElement('div');
   askBox.id = 'panel-ask';
   var askTree = null, askSelection = '', askLastId = null;
@@ -1173,13 +1198,12 @@ function clientJs() {
       '<textarea id="ask-q" placeholder="Označi dio teksta gore i pitaj — ili samo pitaj o ovom stablu."></textarea>' +
       '<div class="ask-sel" id="ask-sel"></div>' +
       '<div class="ask-row"><button class="primary" id="ask-send">Pitaj</button>' +
-      '<button id="ask-tutor" title="Pokreni /tutor provjeru u Claude Codeu">Provjeri me u tutoru</button>' +
       '<span class="ask-status" id="ask-status"></span></div>' +
       '<div class="ask-answer" id="ask-answer" hidden></div>' +
       '<div class="ask-actions" id="ask-actions" hidden></div>';
     markBox.after(askBox);
+    askBox.after(tutorBox);
     document.getElementById('ask-send').onclick = function () { sendAsk('ask'); };
-    document.getElementById('ask-tutor').onclick = function () { sendAsk('tutor'); };
   }
 
   // The highlighted passage IS the question's context: capture it from the
@@ -1213,52 +1237,219 @@ function clientJs() {
       .then(function (r) {
         if (r.error) throw new Error(r.error);
         askLastId = r.id;
-        if (!r.watcher.alive) setStatus('Čekam Claude Code — pokreni /ask --watch u trezoru.');
-        else setStatus(kind === 'tutor' ? 'Tutor se pokreće u terminalu…' : 'Razmišljam…');
+        setStatus(r.watcher.alive ? 'Razmišljam…' : ASK_WAIT);
         listen(r.id, kind);
       })
       .catch(function (e) { setStatus('Greška: ' + e.message, true); btns.forEach(function (b) { b.disabled = false; }); });
   }
 
-  function listen(id, kind) {
+  // One SSE stream per request: status.json as it changes, then the rendered
+  // answer. The handlers belong to whichever box sent the request; a 'show'
+  // in the status belongs to the graph, whoever asked.
+  function stream(id, h) {
     var es = new EventSource('/api/answer/' + id + '?t=' + encodeURIComponent(BRIDGE.tok));
-    var ans = document.getElementById('ask-answer');
-    var acts = document.getElementById('ask-actions');
     es.addEventListener('watcher', function (ev) {
-      var w = JSON.parse(ev.data);
-      if (!w.alive) setStatus('Čekam Claude Code — pokreni /ask --watch u trezoru.');
+      if (!JSON.parse(ev.data).alive) h.status(h.wait);
     });
     es.addEventListener('status', function (ev) {
       var st = JSON.parse(ev.data);
-      if (st.state === 'error') setStatus('Greška: ' + (st.message || 'nepoznata'), true);
-      else if (st.message) setStatus(st.message);
-      else if (st.state === 'writing') setStatus('Pišem stablo…');
-      else setStatus('Razmišljam…');
+      if (st.show) applyShow(st.show);
+      if (st.state === 'error') h.status('Greška: ' + (st.message || 'nepoznata'), true);
+      else if (st.message) h.status(st.message);
+      else if (st.state === 'writing') h.status('Pišem stablo…');
+      else if (st.state !== 'done') h.status('Razmišljam…');
     });
-    es.addEventListener('answer', function (ev) {
-      var a = JSON.parse(ev.data);
-      ans.hidden = false; ans.innerHTML = a.html;
-      acts.hidden = false; acts.innerHTML = '';
-      setStatus('');
-      if (a.trees_added && a.trees_added.length) {
-        // The forest on disk changed under us: the server hands out the
-        // rebuilt page, so a reload is how the new tree appears.
-        var b = document.createElement('button'); b.className = 'primary';
-        b.textContent = 'Novo stablo: ' + a.trees_added.join(', ') + ' — osvježi';
-        b.onclick = function () { location.reload(); };
-        acts.appendChild(b);
-      } else if (kind === 'ask' && /\bponud|\boffer|\buzgoj|\bgrow\b/i.test(a.markdown)) {
-        var g = document.createElement('button');
-        g.textContent = 'Da, uzgoji to u stablo';
-        g.onclick = function () { sendAsk('grow', id); };
-        acts.appendChild(g);
-      }
+    es.addEventListener('answer', function (ev) { h.answer(JSON.parse(ev.data)); });
+    es.addEventListener('done', function () { es.close(); h.done(); });
+    es.onerror = function () { es.close(); h.status('Veza prekinuta.', true); h.done(); };
+  }
+
+  // status.json may carry show:{focus, trees[]} — the model's choice of what
+  // to look at. Outline the focus, brighten the rest, until the next show.
+  function applyShow(show) {
+    document.querySelectorAll('.node.show-lit, .node.show-focus').forEach(function (n) {
+      n.classList.remove('show-lit', 'show-focus');
     });
-    es.addEventListener('done', function () {
-      es.close();
-      askBox.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+    var mark = function (id, cls) {
+      if (typeof id !== 'string' || !/^[\w-]+$/.test(id)) return;
+      var n = document.querySelector('.node[data-id="' + id + '"]');
+      if (n) n.classList.add(cls);
+    };
+    (Array.isArray(show.trees) ? show.trees : []).forEach(function (id) { mark(id, 'show-lit'); });
+    mark(show.focus, 'show-focus');
+  }
+
+  function listen(id, kind) {
+    var ans = document.getElementById('ask-answer');
+    var acts = document.getElementById('ask-actions');
+    stream(id, {
+      wait: ASK_WAIT,
+      status: setStatus,
+      done: function () { askBox.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); },
+      answer: function (a) {
+        ans.hidden = false; ans.innerHTML = a.html;
+        acts.hidden = false; acts.innerHTML = '';
+        setStatus('');
+        if (a.trees_added && a.trees_added.length) {
+          // The forest on disk changed under us: the server hands out the
+          // rebuilt page, so a reload is how the new tree appears.
+          var b = document.createElement('button'); b.className = 'primary';
+          b.textContent = 'Novo stablo: ' + a.trees_added.join(', ') + ' — osvježi';
+          b.onclick = function () { location.reload(); };
+          acts.appendChild(b);
+        } else if (kind === 'ask' && /\bponud|\boffer|\buzgoj|\bgrow\b/i.test(a.markdown)) {
+          var g = document.createElement('button');
+          g.textContent = 'Da, uzgoji to u stablo';
+          g.onclick = function () { sendAsk('grow', id); };
+          acts.appendChild(g);
+        }
+      },
     });
-    es.onerror = function () { es.close(); setStatus('Veza prekinuta.', true); askBox.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); };
+  }
+
+  // ---- the tutor section: served-mode only, one session per vault ---------
+  // The conversation lives on disk under sessions/<slug>/ and the page keeps
+  // only the slug, so closing the tab loses nothing and a reload resumes.
+  var TUTOR_WAIT = 'Čekam Claude Code — pokreni /forest:tutor u trezoru.';
+  var tutorBox = document.createElement('div');
+  tutorBox.id = 'panel-tutor';
+  tutorBox.innerHTML =
+    '<div class="tutor-head">Tutor</div>' +
+    '<div id="tutor-live" hidden>' +
+    '<div class="tutor-reply" id="tutor-reply"></div>' +
+    '<div class="tutor-note" id="tutor-note" hidden></div>' +
+    '<div id="tutor-answer"><textarea id="tutor-a" placeholder="odgovor…"></textarea>' +
+    '<div class="ask-row"><button class="primary" id="tutor-send">Pošalji</button>' +
+    '<button id="tutor-pause">Pauza</button>' +
+    '<span class="ask-status" id="tutor-status"></span></div></div>' +
+    '<details><summary>Bilješke</summary><div class="tutor-notes" id="tutor-notes"></div></details>' +
+    '</div>' +
+    '<div id="tutor-idle"><button class="primary" id="tutor-start">Pokreni tutora</button>' +
+    '<div class="tutor-hint">Tutor će postavljati pitanja ovdje; odgovaraj u polju ispod.</div></div>';
+  var tutor = { slug: null, status: null, lastId: null, notesHtml: '', rev: null, busy: false };
+  var tEl = function (id) { return tutorBox.querySelector('#' + id); };
+  tEl('tutor-start').onclick = function () { sendTutor('start'); };
+  tEl('tutor-send').onclick = function () { sendTutor('answer'); };
+  tEl('tutor-pause').onclick = function () { sendTutor('pause'); };
+
+  function rememberedSlug() {
+    try { return localStorage.getItem(F.sessionKey); } catch (e) { return null; }
+  }
+  function rememberSlug(slug) {
+    try { localStorage.setItem(F.sessionKey, slug); } catch (e) {}
+  }
+  function proposeSlug() {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    var base = 'sesija-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
+    // The stamp has minute resolution: a session started within the minute
+    // of the last one would land in its directory and resume it, so the
+    // second one in a minute gets a suffix.
+    var prev = rememberedSlug();
+    if (!prev || prev.indexOf(base) !== 0) return base;
+    var m = /^-(\d+)$/.exec(prev.slice(base.length));
+    return base + '-' + (m ? Number(m[1]) + 1 : 2);
+  }
+  function tutorStatus(msg, err) {
+    var el = tEl('tutor-status');
+    el.textContent = msg || '';
+    el.classList.toggle('err', !!err);
+  }
+  function setTutorBusy(b) {
+    tutor.busy = b;
+    tutorBox.querySelectorAll('button').forEach(function (x) { x.disabled = b; });
+  }
+  function renderTutor() {
+    var st = tutor.status;
+    tEl('tutor-live').hidden = !st;
+    tEl('tutor-idle').hidden = !!st && st !== 'done';
+    tEl('tutor-answer').hidden = st === 'done';
+    var note = tEl('tutor-note');
+    note.hidden = !(st === 'paused' || st === 'done');
+    note.textContent = st === 'done'
+      ? 'Sesija je zaključena — bilješke ostaju ispod.'
+      : 'Tutor je zapisao gdje smo stali — nastavi kad želiš.';
+  }
+  // Replaced wholesale, as the server renders it; the member's own scroll
+  // position in the block survives the swap.
+  function setNotes(html) {
+    if (html === tutor.notesHtml) return;
+    tutor.notesHtml = html;
+    var el = tEl('tutor-notes');
+    var top = el.scrollTop;
+    el.innerHTML = html;
+    el.scrollTop = top;
+  }
+  // After a reload the last reply went with the tab; the notes' last section
+  // — the pending question, or the closing paragraph — stands in for it.
+  function lastSection(html) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var hs = tmp.querySelectorAll('h2');
+    if (!hs.length) return html;
+    var out = '', n = hs[hs.length - 1];
+    while (n) { out += n.outerHTML; n = n.nextElementSibling; }
+    return out;
+  }
+  // A state.json caught mid-write parses as null; the status it had a poll
+  // ago is a better guess than 'active'.
+  function takeSession(r) {
+    if (r.unchanged) return;
+    tutor.rev = r.rev || null;
+    tutor.status = (r.state && r.state.status) || tutor.status || 'active';
+    setNotes(r.notes_html || '');
+    renderTutor();
+  }
+  function pollSession() {
+    if (!tutor.slug || !panel.classList.contains('open') || document.visibilityState !== 'visible') return;
+    var since = tutor.rev ? '?since=' + encodeURIComponent(tutor.rev) : '';
+    api('/api/session/' + encodeURIComponent(tutor.slug) + since).then(function (r) {
+      if (r.exists) { takeSession(r); return; }
+      // No directory yet while a start is in flight is normal; a session
+      // that vanished otherwise leaves nothing to resume.
+      if (tutor.status && !tutor.busy) { tutor.status = null; renderTutor(); }
+    }).catch(function () {});
+  }
+  function restoreTutor() {
+    tutor.slug = rememberedSlug();
+    if (!tutor.slug) return;
+    api('/api/session/' + encodeURIComponent(tutor.slug)).then(function (r) {
+      if (!r.exists) return;
+      takeSession(r);
+      tEl('tutor-reply').innerHTML = lastSection(r.notes_html || '');
+      var t = r.state && r.state.tree;
+      if (!panel.classList.contains('open') && t && F.nodes[t]) openPanel(t);
+    }).catch(function () {});
+  }
+  function sendTutor(action) {
+    var ta = tEl('tutor-a');
+    var q = action === 'answer' ? ta.value.trim() : '';
+    if (action === 'answer' && !q) { tutorStatus('Napiši odgovor.', true); return; }
+    if (action === 'start') {
+      tutor.slug = proposeSlug(); rememberSlug(tutor.slug);
+      tutor.status = 'active'; tutor.lastId = null; tutor.rev = null;
+      tEl('tutor-reply').innerHTML = ''; setNotes('');
+      renderTutor();
+    }
+    setTutorBusy(true);
+    tutorStatus('Šaljem…');
+    api('/api/ask', { method: 'POST', body: {
+      kind: 'tutor', action: action, session: tutor.slug, tree: selected,
+      question: q, reply_to: tutor.lastId, progress: Object.keys(done).sort(),
+    } }).then(function (r) {
+      if (r.error) throw new Error(r.error);
+      tutor.lastId = r.id;
+      tutorStatus(r.watcher.alive ? 'Razmišljam…' : TUTOR_WAIT);
+      stream(r.id, {
+        wait: TUTOR_WAIT,
+        status: tutorStatus,
+        done: function () { setTutorBusy(false); pollSession(); },
+        answer: function (a) {
+          tEl('tutor-reply').innerHTML = a.html;
+          if (action === 'answer') ta.value = '';
+          tutorStatus('');
+        },
+      });
+    }).catch(function (e) { tutorStatus('Greška: ' + e.message, true); setTutorBusy(false); });
   }
 
   if (BRIDGE.on) {
@@ -1267,10 +1458,11 @@ function clientJs() {
     var poll = function () {
       api('/api/state').then(function (s) {
         pill.classList.toggle('on', !!s.watcher.alive);
-        pill.textContent = s.watcher.alive ? '● Claude Code spojen' : '○ Claude Code nije spojen — /ask --watch';
+        pill.textContent = s.watcher.alive ? '● Claude Code spojen' : '○ Claude Code nije spojen — /forest:tutor';
       }).catch(function () { pill.textContent = '○ most nedostupan'; pill.classList.remove('on'); });
     };
     poll(); setInterval(poll, 5000);
+    restoreTutor(); setInterval(pollSession, 2000);
   }
 })();`;
 }
