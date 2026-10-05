@@ -425,6 +425,10 @@
   var structureFitted = false;
   var KIND_COLOR = {}, KIND_HR = {}, objById = {}, arrowById = {};
   var sedges = [];
+  // A loop is an arc 20 high and about as wide on the top side of its box:
+  // small enough to stay in the gap between two rows.
+  var LOOP_H = 20, LOOP_W = 16, LOOP_FLARE = 12, LOOP_PITCH = 44;
+  var sTop = 0;
 
   function setTab(name) {
     if (!S) return;
@@ -442,12 +446,14 @@
     applyView();
   }
 
+  // sTop is how far a loop on a top-row box, and its label, reach over the
+  // top of the layout.
   function fitStructure() {
     var r = svg.getBoundingClientRect();
-    var k = Math.min(1.2, (r.width - 40) / (S.size.w + 40), (r.height - topbarH - 120) / (S.size.h + 40));
+    var k = Math.min(1.2, (r.width - 40) / (S.size.w + 40), (r.height - topbarH - 120) / (S.size.h - sTop + 40));
     views.structure.k = Math.max(0.2, k);
     views.structure.x = 20;
-    views.structure.y = topbarH + 20;
+    views.structure.y = topbarH + 20 - sTop * views.structure.k;
   }
 
   function boxOf(id) {
@@ -476,22 +482,34 @@
   // between them with level tangents — so it stays in the gap between the
   // two columns and cannot cross a box that is not one of its ends. Ports
   // on a side are ordered by where the other end sits, which keeps a fan
-  // from crossing itself.
+  // from crossing itself. An arrow from a box to itself is a loop: an arc
+  // that leaves and re-enters the top side near the right corner and bulges
+  // into the row gap above, several on one box side by side.
   function buildEdges() {
-    var list = [], seen = {};
+    var list = [], seen = {}, loops = {};
     S.arrows.forEach(function (a) {
-      if (seen[a.id] || a.kind === 'instance' || !S.pos[a.from] || !S.pos[a.to] || a.from === a.to) return;
-      var e = { ids: [a.id], from: a.from, to: a.to, kind: a.kind, two: false, labels: [a.label_html], titles: [a.title] };
+      if (seen[a.id] || a.kind === 'instance' || !S.pos[a.from] || !S.pos[a.to]) return;
+      var e = { ids: [a.id], from: a.from, to: a.to, kind: a.kind, two: false, loop: a.from === a.to, upTo: !!a.up_to, labels: [a.label_html], titles: [a.title] };
       var b = a.inverse && arrowById[a.inverse];
-      if (b && b.inverse === a.id && b.kind !== 'instance' && !seen[b.id]) {
-        seen[b.id] = true; e.ids.push(b.id); e.two = true; e.labels.push(b.label_html); e.titles.push(b.title);
+      if (b && b !== a && b.inverse === a.id && b.kind !== 'instance' && !seen[b.id]) {
+        seen[b.id] = true; e.ids.push(b.id); e.two = true; e.upTo = e.upTo || !!b.up_to; e.labels.push(b.label_html); e.titles.push(b.title);
       }
       seen[a.id] = true;
       list.push(e);
+      if (e.loop) (loops[e.from] = loops[e.from] || []).push(e);
+    });
+    Object.keys(loops).forEach(function (id) {
+      var b = boxOf(id), g = loops[id], pitch = Math.min(LOOP_PITCH, (b.w - 28) / g.length);
+      g.forEach(function (e, n) {
+        var xr = b.x + b.w - 12 - n * pitch, xl = xr - LOOP_W, cy = b.y - LOOP_H * 4 / 3;
+        e.p0 = [xr, b.y]; e.p2 = [xl, b.y];
+        e.segs = [[e.p0, [xr + LOOP_FLARE, cy], [xl - LOOP_FLARE, cy], e.p2]];
+      });
     });
     var sides = {};
     function side(id, s) { var k = id + '|' + s; return sides[k] || (sides[k] = []); }
     list.forEach(function (e, i) {
+      if (e.loop) return;
       var A = boxOf(e.from), B = boxOf(e.to);
       var ca = A.x + A.w / 2, cb = B.x + B.w / 2;
       // Two boxes in one column both use their right side; the edge loops out.
@@ -508,7 +526,14 @@
         if (p.end) p.e.p2 = pt; else p.e.p0 = pt;
       });
     });
-    var allBoxes = S.objects.map(function (o) { var b = boxOf(o.id); b.id = o.id; return b; });
+    // To every other edge a box's loops are part of the box: a detour's lane
+    // runs clear of them.
+    var allBoxes = S.objects.map(function (o) {
+      var b = boxOf(o.id);
+      b.id = o.id;
+      if (loops[o.id]) { b.y -= LOOP_H + 4; b.h += LOOP_H + 4; }
+      return b;
+    });
     // Level tangents at both ends; sp and sq say which way each end faces.
     function cubic(p, q, sp, sq) {
       var reach = Math.max(40, Math.abs(q[0] - p[0]) * 0.5);
@@ -526,6 +551,7 @@
     }
     var lanes = {};
     list.forEach(function (e) {
+      if (e.loop) return;
       var da = e.sa === 'r' ? 1 : -1, db = e.sb === 'r' ? 1 : -1;
       if (e.sa === e.sb) {
         var out = 70 + Math.abs(e.p2[1] - e.p0[1]) * 0.25;
@@ -559,19 +585,23 @@
   function r1(v) { return Math.round(v * 10) / 10; }
   function drawStructure() {
     sedges = buildEdges();
+    sTop = 0;
     var eh = '', lh = '';
     sedges.forEach(function (e, i) {
+      if (e.loop) sTop = Math.min(sTop, e.p0[1] - LOOP_H - 6);
+      // An inverse pair that holds only up to a canonical isomorphism says so.
+      var sep = e.upTo ? '≅' : '⇄';
       var d = 'M' + r1(e.p0[0]) + ',' + r1(e.p0[1]) + e.segs.map(function (g) {
         return ' C' + r1(g[1][0]) + ',' + r1(g[1][1]) + ' ' + r1(g[2][0]) + ',' + r1(g[2][1]) + ' ' + r1(g[3][0]) + ',' + r1(g[3][1]);
       }).join('');
-      eh += '<g class="sedge" data-id="' + escText(e.ids[0]) + '" data-kind="' + escText(e.kind) + '">' +
+      eh += '<g class="sedge' + (e.loop ? ' sloop' : '') + '" data-id="' + escText(e.ids[0]) + '" data-kind="' + escText(e.kind) + '">' +
         '<path class="hit" d="' + d + '"/>' +
         '<path class="line" d="' + d + '" style="stroke:' + KIND_COLOR[e.kind] + '"' +
         ' marker-end="url(#ah-' + e.kind + ')"' + (e.two ? ' marker-start="url(#ah-' + e.kind + ')"' : '') + '/></g>';
       var m = bez(e, 0.5);
-      lh += '<span class="slabel" data-i="' + i + '" data-open="' + escText(e.ids[0]) + '" title="' + escText(e.titles.join(' ⇄ ')) + '"' +
+      lh += '<span class="slabel' + (e.loop ? ' loop' : '') + '" data-i="' + i + '" data-open="' + escText(e.ids[0]) + '" title="' + escText(e.titles.join(' ' + sep + ' ')) + '"' +
         ' style="left:' + r1(m[0]) + 'px;top:' + r1(m[1]) + 'px;color:' + KIND_COLOR[e.kind] + '">' +
-        e.labels.join('<span class="sep">⇄</span>') + '</span>';
+        e.labels.join('<span class="sep">' + sep + '</span>') + '</span>';
     });
     S.objects.forEach(function (o) {
       var p = S.pos[o.id];
@@ -585,8 +615,10 @@
   // middle and the two thirds, so neighbours do not line up; a spot that
   // covers a box, an earlier label or another edge's line costs, and the
   // label slides along its edge — off it only as a last resort — to the
-  // first free spot or the cheapest one. Sizes are read from the overlay,
-  // which is laid out (only hidden) while the other tab shows.
+  // first free spot or the cheapest one. A loop is too small to carry its
+  // label, which stands beside it over the box's top side instead, or above
+  // it. Sizes are read from the overlay, which is laid out (only hidden)
+  // while the other tab shows.
   var LABEL_T = [0.5, 0.4, 0.6, 0.3, 0.7, 0.22, 0.78];
   var LINE_HIT = 60;
   function overlap(a, b) {
@@ -601,6 +633,33 @@
     // A level lane is a cubic with doubled ends: no speed at its two ends.
     return x || y ? unit(x, y) : unit(g[3][0] - g[0][0], g[3][1] - g[0][1]);
   }
+  function edgeSpots(e, h) {
+    var pref = [0.5, 0.36, 0.64][e.slot % 3];
+    var ts = LABEL_T.slice().sort(function (a, b) { return Math.abs(a - pref) - Math.abs(b - pref); });
+    var spots = ts.map(function (t) { return bez(e, t); });
+    ts.forEach(function (t) {
+      var m = bez(e, t), tg = tangent(e, t);
+      [1, -1].forEach(function (side) {
+        var d = side * (h / 2 + 3);
+        spots.push([m[0] - tg[1] * d, m[1] + tg[0] * d]);
+      });
+    });
+    return spots;
+  }
+  // Beside the loop on the box's top side — to its left when the label fits
+  // there — then above it: centred, hanging left, hanging right, and in
+  // further rows when a crowd of loops has taken the first. None may reach
+  // further left of the box than the margin the view opens with.
+  function loopSpots(e, w, h) {
+    var b = boxOf(e.from), top = e.p0[1], beside = top - h / 2 - 3;
+    var spots = [[e.p0[0] + 7 + w / 2, beside]];
+    if (e.p2[0] - 7 - w >= b.x) spots.unshift([e.p2[0] - 7 - w / 2, beside]);
+    for (var row = 0; row < 4; row++) {
+      var y = top - LOOP_H - 3 - h / 2 - row * (h + 2);
+      spots.push([(e.p0[0] + e.p2[0]) / 2, y], [e.p0[0] + 3 - w / 2, y], [e.p2[0] - 3 + w / 2, y]);
+    }
+    return spots.map(function (m) { return [Math.max(m[0], b.x - 12 + w / 2), m[1]]; });
+  }
   function placeLabels() {
     var boxes = S.objects.map(function (o) { return boxOf(o.id); });
     var samples = sedges.map(function (e) {
@@ -609,25 +668,16 @@
       return pts;
     });
     var slots = {};
-    sedges.forEach(function (e) { e.slot = slots[e.from] = (slots[e.from] || 0) + 1; });
+    sedges.forEach(function (e) { if (!e.loop) e.slot = slots[e.from] = (slots[e.from] || 0) + 1; });
     var placed = [];
     slabels.querySelectorAll('.slabel').forEach(function (sp) {
       var i = +sp.getAttribute('data-i'), e = sedges[i];
       var w = sp.offsetWidth, h = sp.offsetHeight;
       if (!w) return;
-      var pref = [0.5, 0.36, 0.64][e.slot % 3];
-      var ts = LABEL_T.slice().sort(function (a, b) { return Math.abs(a - pref) - Math.abs(b - pref); });
-      var cands = [];
-      ts.forEach(function (t) { cands.push([t, 0]); });
-      ts.forEach(function (t) { cands.push([t, 1], [t, -1]); });
+      var spots = e.loop ? loopSpots(e, w, h) : edgeSpots(e, h);
       var best = null;
-      for (var ci = 0; ci < cands.length && !(best && best.cost === 0); ci++) {
-        var t = cands[ci][0], side = cands[ci][1];
-        var m = bez(e, t);
-        if (side) {
-          var tg = tangent(e, t), d = side * (h / 2 + 3);
-          m = [m[0] - tg[1] * d, m[1] + tg[0] * d];
-        }
+      for (var ci = 0; ci < spots.length && !(best && best.cost === 0); ci++) {
+        var m = spots[ci];
         var r = { x: m[0] - w / 2, y: m[1] - h / 2, w: w, h: h };
         var cost = 0;
         boxes.forEach(function (b) { cost += overlap(r, b); });
@@ -642,6 +692,7 @@
       }
       sp.style.left = r1(best.m[0]) + 'px';
       sp.style.top = r1(best.m[1]) + 'px';
+      if (e.loop) sTop = Math.min(sTop, best.r.y - 6);
       placed.push(best.r);
     });
   }
@@ -699,6 +750,15 @@
       var inn = S.arrows.filter(function (a) { return a.to === id && a.kind !== 'instance'; });
       h += '<h3 class="ssec">Strelice iz objekta (' + out.length + ')</h3>' +
         (out.length ? kindGroups(out, 'out') : '<p class="smuted">Nema strelica iz ovog objekta.</p>');
+      // A typed object is another box of its type's kind, so what can be
+      // built from that kind can be built from it. The type's own maps (hom)
+      // are particular arrows between particular boxes and do not carry over.
+      var type = objById[id].type;
+      if (type && objById[type]) {
+        var tout = S.arrows.filter(function (a) { return a.from === type && a.kind !== 'instance' && a.kind !== 'hom'; });
+        h += '<h3 class="ssec">Strelice tipa (' + tout.length + ')</h3>' +
+          (tout.length ? kindGroups(tout, 'out') : '<p class="smuted">Tip nema svojih strelica.</p>');
+      }
       // Examples travel up a generalizes arrow: an example of the special
       // kind is an example of the general one.
       var inst = (S.instances[id] || []).map(function (i) { return { i: i, via: null }; });

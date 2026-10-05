@@ -58,12 +58,14 @@ const MORPHISM_KINDS = new Set([
   "instance",
   "generalizes",
   "construction",
+  "hom",
 ]);
 const BASE_KEYS = ["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin", "language", "digested_from", "proves", "adapted_from"];
-// Any tree may say which objects and arrows it is about, and for which fields.
-const ABOUT_KEYS = ["about", "fields"];
-const OBJECT_KEYS = ["symbol", "hom", "same_as", "nlab"];
-const MORPHISM_KEYS = ["kind", "from", "to", "statement", "label", "acts_on", "needs", "on_homomorphisms", "functorial", "inverse", "generalized_by", "values"];
+// Any tree may say which objects and arrows it is about, for which fields,
+// and which principles of the formal system it assumes.
+const ABOUT_KEYS = ["about", "fields", "assumes"];
+const OBJECT_KEYS = ["symbol", "hom", "type", "same_as", "nlab"];
+const MORPHISM_KEYS = ["kind", "from", "to", "statement", "label", "acts_on", "needs", "on_homomorphisms", "functorial", "invertible", "inverse", "up_to", "generalized_by", "values"];
 const OBJECT_ID = /^obj-[a-z0-9]+(-[a-z0-9]+)*$/;
 const DEFINITION_HEADING = /^##\s+(Definicija|Definition)\s*$/m;
 
@@ -518,13 +520,24 @@ function scrollbackPhrases(body) {
 // ------------------------------------------------------------------ structure
 
 // forest-0.2 only. Objects are kinds of structure, morphisms the constructions
-// between them. from/to arrows are not prerequisites and may form cycles
-// (curry/uncurry), so nothing here feeds checkDag — depends still does, and
-// objects and morphisms sit in that DAG like any tree.
+// between them — or, for kind hom, the maps inside one kind. from/to arrows
+// are not prerequisites and may form cycles (curry/uncurry) and loops, so
+// nothing here feeds checkDag — depends still does, and objects and morphisms
+// sit in that DAG like any tree.
 function checkStructure(trees, err, warn) {
   const treeOfTaxon = (id, taxon) => {
     const t = typeof id === "string" ? trees.get(id) : undefined;
     return t && t.fm.taxon === taxon ? t : null;
+  };
+  // The kind a box is an object of: its type, or itself. Undefined while
+  // `type` is broken, so a bad type is reported once and not again by every
+  // hom arrow that touches the box.
+  const rootType = (id) => {
+    const t = treeOfTaxon(id, "object");
+    if (!t) return undefined;
+    if (t.fm.type === undefined) return t.stem;
+    const type = treeOfTaxon(t.fm.type, "object");
+    return type && type.fm.type === undefined ? type.stem : undefined;
   };
   // LaTeX fields are typeset whole, so a $ inside them is a stray delimiter
   // that KaTeX would print as an error, not math.
@@ -561,13 +574,17 @@ function checkStructure(trees, err, warn) {
     if (fm.fields !== undefined && !(isStringArray(fm.fields) && fm.fields.every((f) => KEBAB.test(f)))) {
       err(`${file}: fields must be an array of kebab-case words (e.g. algebra, kombinatorika)`);
     }
+    if (fm.assumes !== undefined && !(isStringArray(fm.assumes) && fm.assumes.every((a) => KEBAB.test(a)))) {
+      err(`${file}: assumes must be an array of kebab-case tokens (e.g. axiom-of-choice, excluded-middle)`);
+    }
 
     if (fm.taxon === "object") checkObject(t);
     if (fm.taxon === "morphism") checkMorphism(t);
   }
 
   // Coverage, as warnings: an object nobody has instantiated or placed among
-  // wider/narrower kinds is a box with no example and no context.
+  // wider/narrower kinds is a box with no example and no context. A typed
+  // object is a second box of a kind that answers for all three itself.
   const instanced = new Set();
   const generalized = new Set();
   for (const t of trees.values()) {
@@ -579,7 +596,7 @@ function checkStructure(trees, err, warn) {
     }
   }
   for (const t of trees.values()) {
-    if (t.fm.taxon !== "object") continue;
+    if (t.fm.taxon !== "object" || t.fm.type !== undefined) continue;
     if (!instanced.has(t.stem)) {
       warn(`${t.file}: object has no instance arrow (a mor- tree with kind: instance, to: ${t.stem}) — give it an example`);
     }
@@ -591,9 +608,23 @@ function checkStructure(trees, err, warn) {
     }
   }
 
-  function checkObject({ file, fm }) {
+  function checkObject({ file, stem, fm }) {
     latex(file, "symbol", fm.symbol);
-    sentence(file, "hom", fm.hom);
+    if (fm.type === undefined) {
+      sentence(file, "hom", fm.hom);
+    } else {
+      // One level only: a typed box inherits its type's hom, so the type
+      // must be the kind's own box, the one that states it.
+      const type = treeOfTaxon(fm.type, "object");
+      if (!type) {
+        err(`${file}: type ${JSON.stringify(fm.type)} must name an object (obj-) tree in this vault`);
+      } else if (fm.type === stem) {
+        err(`${file}: type names the object itself — the kind's own box carries no type`);
+      } else if (type.fm.type !== undefined) {
+        err(`${file}: type "${fm.type}" is itself typed (see ${type.file}: type) — one level only, name the kind both are objects of`);
+      }
+      if (fm.hom !== undefined) sentence(file, "hom", fm.hom);
+    }
     // Cross-vault identity points into the library forest, which is another
     // repository — only the shape is checked here; grow resolves it.
     if (fm.same_as !== undefined && !(typeof fm.same_as === "string" && OBJECT_ID.test(fm.same_as))) {
@@ -619,6 +650,7 @@ function checkStructure(trees, err, warn) {
       err(`${file}: kind must be one of ${[...MORPHISM_KINDS].join(", ")}, got ${JSON.stringify(fm.kind)}`);
     }
     const instance = fm.kind === "instance";
+    const hom = fm.kind === "hom";
 
     if (typeof fm.from !== "string") {
       err(`${file}: from must be an object id (or "${POINT}" on an instance arrow)`);
@@ -664,6 +696,25 @@ function checkStructure(trees, err, warn) {
           }
         }
       }
+    } else if (hom) {
+      // A hom is itself a map between two structures of one kind, so the keys
+      // that say how a construction treats such maps have nothing to describe.
+      for (const key of ["acts_on", "on_homomorphisms", "functorial", "values"]) {
+        if (fm[key] !== undefined) {
+          err(`${file}: ${key} is not allowed on a hom arrow — it is itself a map, not a construction acting on maps`);
+        }
+      }
+      if (fm.needs === undefined) {
+        err(`${file}: needs is required — the extra data the map depends on beyond its two ends (may be [])`);
+      }
+      const a = rootType(fm.from);
+      const b = rootType(fm.to);
+      if (a && b && a !== b) {
+        err(`${file}: a hom arrow joins two objects of one type, but from "${fm.from}" is of type "${a}" and to "${fm.to}" of type "${b}"`);
+      }
+      if (fm.invertible !== undefined && typeof fm.invertible !== "boolean") {
+        err(`${file}: invertible must be true or false`);
+      }
     } else {
       if (fm.values !== undefined) {
         err(`${file}: values is only allowed on an instance arrow (kind: instance)`);
@@ -697,12 +748,33 @@ function checkStructure(trees, err, warn) {
       }
     }
 
+    if (!hom && fm.invertible !== undefined) {
+      err(`${file}: invertible is only allowed on a hom arrow (kind: hom) — between kinds, inverse marks the isomorphism`);
+    }
+
     if (fm.inverse !== undefined) {
       const m = treeOfTaxon(fm.inverse, "morphism");
       if (!m) {
         err(`${file}: inverse ${JSON.stringify(fm.inverse)} must name a morphism tree`);
       } else if (m.fm.inverse !== stem) {
         err(`${file}: inverse "${fm.inverse}" does not point back — ${m.file} must carry inverse: ${stem}`);
+      } else if (m.fm.from !== fm.to || m.fm.to !== fm.from) {
+        // Without this an arrow and a loop could call each other inverse;
+        // the views then fold the loop into the other edge and it vanishes.
+        err(`${file}: inverse "${fm.inverse}" must run the other way — it goes ${m.fm.from} → ${m.fm.to}, not ${fm.to} → ${fm.from}`);
+      }
+      if (hom && fm.invertible === false) {
+        err(`${file}: a hom with an inverse cannot be invertible: false`);
+      }
+    }
+    // The pair stays symmetric; up_to only says the round trip is the
+    // identity up to the isomorphism that tree states, on either side or both.
+    if (fm.up_to !== undefined) {
+      if (fm.inverse === undefined) {
+        err(`${file}: up_to needs inverse — it names the tree stating the canonical isomorphism the inverse holds up to`);
+      }
+      if (typeof fm.up_to !== "string" || !trees.has(fm.up_to)) {
+        err(`${file}: up_to ${JSON.stringify(fm.up_to)} must name a tree in this vault`);
       }
     }
     if (fm.generalized_by !== undefined) {

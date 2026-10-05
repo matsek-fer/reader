@@ -5,9 +5,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import yaml from "js-yaml";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -120,8 +121,28 @@ test("fixture structure-ok (forest-0.2) passes clean", () => {
   assert.ok(!out.includes("warning:"), out);
 });
 
+// The clean pass above only means something for the newer keys if the vault
+// really carries them: a typed object without its own hom, a hom between two
+// boxes of one type, a hom loop, invertible, up_to and assumes.
+test("fixture structure-ok exercises typed objects, hom arrows, loops, up_to and assumes", () => {
+  const fm = (id) => {
+    const text = readFileSync(path.join(here, "test-fixtures", "structure-ok", "trees", `${id}.md`), "utf8");
+    return yaml.load(/^---\n([\s\S]*?)\n---/.exec(text)[1]);
+  };
+  const typed = fm("obj-druga-grupa");
+  assert.equal(typed.type, "obj-grupa");
+  assert.equal(typed.hom, undefined);
+  const between = fm("mor-homomorfizam");
+  assert.deepEqual([between.kind, between.from, between.to], ["hom", "obj-grupa", "obj-druga-grupa"]);
+  const loop = fm("mor-konjugacija");
+  assert.deepEqual([loop.kind, loop.from, loop.to, loop.invertible], ["hom", "obj-grupa", "obj-grupa", true]);
+  const dual = fm("mor-dual");
+  assert.deepEqual([dual.inverse, dual.up_to], ["mor-dual", "thm-dvostruki-dual"]);
+  assert.deepEqual(fm("thm-svaki-skup-nosi-grupu").assumes, ["axiom-of-choice"]);
+});
+
 const structureFixtures = [
-  ["bad-kind", "trees/mor-op.md: kind must be one of data, transform, extract, property, instance, generalizes, construction"],
+  ["bad-kind", "trees/mor-op.md: kind must be one of data, transform, extract, property, instance, generalizes, construction, hom"],
   ["instance-not-pt", 'trees/mor-z6.md: from must be "pt" on an instance arrow'],
   ["pt-not-instance", 'trees/mor-konacan-je-skup.md: from is "pt" but kind is "generalizes"'],
   ["acts-on-not-data", 'trees/mor-partitivni-skup-grupe.md: acts_on entry "mor-op" has kind "transform"'],
@@ -132,6 +153,17 @@ const structureFixtures = [
   ["dollar-in-statement", "trees/mor-nosac.md: statement must be LaTeX without $ delimiters"],
   ["generalizes-not-functorial", "trees/mor-grupa-je-monoid.md: a generalizes arrow must be functorial: true"],
   ["about-unresolved", 'trees/thm-nosac-je-skup.md: about names unknown tree "obj-prsten"'],
+  // Typed objects: a second box of a kind names that kind's own box, one level deep.
+  ["type-not-object", 'trees/obj-druga-grupa.md: type "def-grupa" must name an object (obj-) tree in this vault'],
+  ["type-chain", 'trees/obj-treca-grupa.md: type "obj-druga-grupa" is itself typed'],
+  // kind hom: a map inside one kind, so both ends share a type and the keys
+  // that describe a construction's effect on maps are refused.
+  ["hom-different-types", 'trees/mor-homomorfizam.md: a hom arrow joins two objects of one type, but from "obj-grupa" is of type "obj-grupa" and to "obj-monoid" of type "obj-monoid"'],
+  ["hom-with-functorial", "trees/mor-homomorfizam.md: functorial is not allowed on a hom arrow"],
+  ["invertible-on-non-hom", "trees/mor-op.md: invertible is only allowed on a hom arrow"],
+  ["up-to-without-inverse", "trees/mor-dual.md: up_to needs inverse"],
+  ["up-to-unresolved", 'trees/mor-dual.md: up_to "thm-nema" must name a tree in this vault'],
+  ["assumes-not-kebab", "trees/thm-svaki-skup-nosi-grupu.md: assumes must be an array of kebab-case tokens"],
 ];
 
 for (const [name, expected] of structureFixtures) {
@@ -142,6 +174,24 @@ for (const [name, expected] of structureFixtures) {
     assert.ok(out.includes("1 error(s)"), out);
   });
 }
+
+test("fixture inverse-wrong-ends: a pair whose ends do not swap fails on both sides", () => {
+  // Both arrows are wrong, so both complain: inverse is symmetric, and
+  // without this rule the views fold the loop into the other edge and it
+  // disappears from the picture.
+  const { status, out } = run(["scripts/test-fixtures/inverse-wrong-ends"]);
+  assert.equal(status, 1, out);
+  assert.ok(out.includes('error: trees/mor-dual.md: inverse "mor-homomorfizam" must run the other way'), out);
+  assert.ok(out.includes('error: trees/mor-homomorfizam.md: inverse "mor-dual" must run the other way'), out);
+  assert.ok(out.includes("2 error(s)"), out);
+});
+
+test("fixture hom-inverse-not-invertible: an inverse contradicts invertible: false", () => {
+  const { status, out } = run(["scripts/test-fixtures/hom-inverse-not-invertible"]);
+  assert.equal(status, 1, out);
+  assert.ok(out.includes("error: trees/mor-konjugacija.md: a hom with an inverse cannot be invertible: false"), out);
+  assert.ok(out.includes("1 error(s)"), out);
+});
 
 test("fixture structure-warnings: an uncovered object warns three times and still passes", () => {
   const { status, out } = run(["scripts/test-fixtures/structure-warnings"]);
@@ -162,6 +212,7 @@ test("fixture structure-in-0.1-vault rejects the taxon and the keys", () => {
   assert.ok(out.includes('error: trees/obj-alfa.md: unknown key "symbol"'), out);
   assert.ok(out.includes('error: trees/obj-alfa.md: unknown key "hom"'), out);
   assert.ok(out.includes('error: trees/def-alfa.md: unknown key "about"'), out);
+  assert.ok(out.includes('error: trees/def-alfa.md: unknown key "assumes"'), out);
 });
 
 test("share-alike derivative vault with the SA notice passes clean", () => {

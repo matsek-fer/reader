@@ -2,7 +2,7 @@
 id: con-ekvivarijantna-preslikavanja
 taxon: connection
 title: "Ekvivarijantna preslikavanja: morfizmi među djelovanjima"
-about: [obj-group-action]
+about: [obj-group-action, mor-equivariant-map]
 teaches: [group-actions]
 requires: [group-homomorphisms]
 depends: [obj-group-action, def-group-action]
@@ -12,10 +12,10 @@ origin: agent
 ---
 
 Ova veza spaja djelovanja grupe ([[obj-group-action]]) s preslikavanjima među
-njima. Dva djelovanja iste grupe $G$, na $X$ i na $Y$, povezuje funkcija
-$f\colon X\to Y$ koja *poštuje* djelovanje — **ekvivarijantno preslikavanje**:
-$f(g\cdot x)=g\cdot f(x)$ za sve $g\in G$, $x\in X$. Kao dijagram, s $\alpha$ i
-$\beta$ za dva djelovanja:
+njima ([[mor-equivariant-map]]). Dva djelovanja iste grupe $G$, na $X$ i na
+$Y$, povezuje funkcija $f\colon X\to Y$ koja *poštuje* djelovanje —
+**ekvivarijantno preslikavanje**: $f(g\cdot x)=g\cdot f(x)$ za sve $g\in G$,
+$x\in X$. Kao dijagram, s $\alpha$ i $\beta$ za dva djelovanja:
 
 ```cd
 GX @ 0,0 : G\times X

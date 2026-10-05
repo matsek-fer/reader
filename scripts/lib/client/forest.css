@@ -158,6 +158,8 @@ body.tab-structure #slegend { display: flex; }
 .sdl dt { margin-top: 3px; }
 .sdl dd { margin: 0 0 0 14px; }
 .smuted { color: var(--fg-muted); font-size: 13px; }
+/* Four cells in a row are as wide as the panel; the figure's side padding would make it scroll. */
+.struct-chain .cd { padding-left: 0; padding-right: 0; }
 /* --- Dijagrami: the bottom strip --- */
 #strip { position: fixed; left: 0; right: 0; bottom: 40px; z-index: 15; background: var(--panel); border-top: 1px solid var(--border); }
 #panel.open ~ #strip { right: min(480px, 90vw); }
@@ -171,3 +173,7 @@ body.tab-structure #slegend { display: flex; }
 #strip.collapsed #strip-body, #strip.empty #strip-body { display: none; }
 #strip-body .cd { margin: .2em 0; }
 #strip-body a, #panel .cd a { color: var(--accent); }
+
+/* A loop's label has no shaft to sit on, so a long one — a title standing in
+   for a missing label — would cover its neighbours or the box above. */
+.slabel.loop { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

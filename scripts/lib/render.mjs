@@ -398,11 +398,16 @@ export function renderCd(source, { has = () => false, lang = "hr" } = {}) {
   const d = parseCd(source, lang);
   const cols = Math.max(1, ...d.corners.map((c) => c.col + 1));
   const rows = Math.max(1, ...d.corners.map((c) => c.row + 1));
-  const W = cols * CELL_W, H = rows * CELL_H;
+  // A corner wider than the cell would overlap its neighbour and squeeze the
+  // arrow between them to nothing, so the whole grid widens to the widest
+  // corner. Only the generated chain figure reaches this; hand-written
+  // diagrams keep the 7em cell they were laid out in.
+  const cellW = Math.max(CELL_W, ...d.corners.map((c) => 2 * halfWidth(c.tex) + 120));
+  const W = cols * cellW, H = rows * CELL_H;
   const byName = new Map();
   const cells = d.corners.map((c) => {
     const { col, row } = c;
-    byName.set(c.name, { x: (col + 0.5) * CELL_W, y: (row + 0.5) * CELL_H, hw: halfWidth(c.tex), hh: NODE_HH });
+    byName.set(c.name, { x: (col + 0.5) * cellW, y: (row + 0.5) * CELL_H, hw: halfWidth(c.tex), hh: NODE_HH });
     return `<div class="cd-corner" data-name="${escapeHtml(c.name)}" style="grid-area:${row + 1}/${col + 1}">${renderMath(c.tex, false)}</div>`;
   });
   const svg = [], labels = [];
@@ -430,7 +435,7 @@ export function renderCd(source, { has = () => false, lang = "hr" } = {}) {
   }
   for (const e of d.errors) caption.push(`<div class="cd-error">${escapeHtml(e)}</div>`);
   return `<figure class="cd" data-title="${escapeHtml(d.title)}">` +
-    `<div class="cd-grid" style="grid-template-columns:repeat(${cols},7em);grid-template-rows:repeat(${rows},3.6em)">` +
+    `<div class="cd-grid" style="grid-template-columns:repeat(${cols},${fmt(cellW / 100)}em);grid-template-rows:repeat(${rows},3.6em)">` +
     cells.join("") +
     `<svg class="cd-arrows" viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">${svg.join("")}</svg>` +
     labels.join("") +

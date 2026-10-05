@@ -191,7 +191,9 @@ for (const id of picked) {
   // Structure edges (forest-0.2) follow the same resolution as depends. The
   // endpoints are required, so an unresolvable from/to is kept and noted —
   // the forest validator refuses the tree on arrival, which beats a guess.
-  for (const k of ["from", "to"]) {
+  // A typed object's type is kept the same way: dropped, the box would pass
+  // for a kind of its own.
+  for (const k of ["from", "to", "type"]) {
     if (typeof fm[k] !== "string" || fm[k] === "pt") continue;
     const r = resolve(fm[k]);
     if (r) fm[k] = r;
@@ -201,6 +203,15 @@ for (const id of picked) {
     const r = resolve(fm.inverse);
     if (r) fm.inverse = r;
     else { notes.push(`dropped inverse ${newId} → ${fm.inverse} (unresolvable)`); delete fm.inverse; }
+  }
+  // up_to qualifies the inverse, so it goes when the inverse went.
+  if (typeof fm.up_to === "string") {
+    const r = fm.inverse === undefined ? null : resolve(fm.up_to);
+    if (r) fm.up_to = r;
+    else {
+      notes.push(`dropped up_to ${newId} → ${fm.up_to} (${fm.inverse === undefined ? "no inverse left to qualify" : "unresolvable"})`);
+      delete fm.up_to;
+    }
   }
   for (const k of ["about", "generalized_by", "acts_on"]) {
     if (!Array.isArray(fm[k])) continue;

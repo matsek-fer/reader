@@ -21,7 +21,7 @@
       "group": "4 · Primjer i veza",
       "standalone": true,
       "offset": 0,
-      "scale": 0.00099004864
+      "scale": 0.0009938753
     },
     {
       "id": "con-slobodna-djelovanja",
@@ -174,6 +174,39 @@
       "scale": 0.00096252197
     },
     {
+      "id": "exp-petlja-kao-lanac",
+      "taxon": "exposition",
+      "title": "Petlja kao lanac",
+      "teaches": [],
+      "requires": [
+        "categories-functors"
+      ],
+      "depends": [],
+      "group": "4 · Primjer i veza",
+      "standalone": true,
+      "offset": 3840,
+      "scale": 0.0010410228
+    },
+    {
+      "id": "mor-act-by-element",
+      "taxon": "morphism",
+      "title": "Djelovanje jednog elementa",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "cyclic-groups"
+      ],
+      "depends": [
+        "obj-set",
+        "def-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 4224,
+      "scale": 0.00096504285
+    },
+    {
       "id": "mor-action-group",
       "taxon": "morphism",
       "title": "Grupa koja djeluje",
@@ -186,7 +219,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 3840,
+      "offset": 4608,
       "scale": 0.00088079233
     },
     {
@@ -202,7 +235,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 4224,
+      "offset": 4992,
       "scale": 0.00092531207
     },
     {
@@ -220,7 +253,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 4608,
+      "offset": 5376,
       "scale": 0.00087721001
     },
     {
@@ -238,7 +271,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 4992,
+      "offset": 5760,
       "scale": 0.00091608426
     },
     {
@@ -258,8 +291,25 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 5376,
+      "offset": 6144,
       "scale": 0.00097049614
+    },
+    {
+      "id": "mor-equivariant-map",
+      "taxon": "morphism",
+      "title": "Ekvivarijantno preslikavanje",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [],
+      "depends": [
+        "obj-group-action",
+        "obj-group-action-target"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 6528,
+      "scale": 0.00094558739
     },
     {
       "id": "mor-fixed-points",
@@ -275,7 +325,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 5760,
+      "offset": 6912,
       "scale": 0.00099278681
     },
     {
@@ -293,7 +343,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 6144,
+      "offset": 7296,
       "scale": 0.00096561349
     },
     {
@@ -308,7 +358,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 6528,
+      "offset": 7680,
       "scale": 0.00097126743
     },
     {
@@ -326,7 +376,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 6912,
+      "offset": 8064,
       "scale": 0.00093749523
     },
     {
@@ -342,7 +392,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 7296,
+      "offset": 8448,
       "scale": 0.00096841925
     },
     {
@@ -359,7 +409,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 7680,
+      "offset": 8832,
       "scale": 0.00099049462
     },
     {
@@ -378,7 +428,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 8064,
+      "offset": 9216,
       "scale": 0.0010166418
     },
     {
@@ -398,7 +448,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 8448,
+      "offset": 9600,
       "scale": 0.0010323257
     },
     {
@@ -415,7 +465,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 8832,
+      "offset": 9984,
       "scale": 0.0010973325
     },
     {
@@ -431,7 +481,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 9216,
+      "offset": 10368,
       "scale": 0.00095759649
     },
     {
@@ -451,8 +501,22 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 9600,
+      "offset": 10752,
       "scale": 0.00094148452
+    },
+    {
+      "id": "obj-group-action-target",
+      "taxon": "object",
+      "title": "Drugo djelovanje iste grupe",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 11136,
+      "scale": 0.0010430122
     },
     {
       "id": "obj-monoid-action",
@@ -466,7 +530,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 9984,
+      "offset": 11520,
       "scale": 0.0009596911
     },
     {
@@ -478,7 +542,7 @@
       "depends": [],
       "group": "Struktura",
       "standalone": true,
-      "offset": 10368,
+      "offset": 11904,
       "scale": 0.0010842972
     },
     {
@@ -498,7 +562,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 10752,
+      "offset": 12288,
       "scale": 0.00097873543
     },
     {
@@ -512,7 +576,7 @@
       "depends": [],
       "group": "Struktura",
       "standalone": true,
-      "offset": 11136,
+      "offset": 12672,
       "scale": 0.0008742161
     },
     {
@@ -529,7 +593,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 11520,
+      "offset": 13056,
       "scale": 0.00097474168
     },
     {
@@ -545,7 +609,7 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 11904,
+      "offset": 13440,
       "scale": 0.00090684818
     },
     {
@@ -561,7 +625,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 12288,
+      "offset": 13824,
       "scale": 0.0010252977
     },
     {
@@ -576,7 +640,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 12672,
+      "offset": 14208,
       "scale": 0.0010188112
     },
     {
@@ -592,7 +656,7 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 13056,
+      "offset": 14592,
       "scale": 0.00088023911
     },
     {
@@ -610,7 +674,7 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 13440,
+      "offset": 14976,
       "scale": 0.00094452788
     },
     {
@@ -627,7 +691,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 13824,
+      "offset": 15360,
       "scale": 0.001023773
     },
     {
@@ -645,7 +709,7 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 14208,
+      "offset": 15744,
       "scale": 0.0010125154
     }
   ]

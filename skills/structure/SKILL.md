@@ -1,6 +1,6 @@
 ---
 name: structure
-description: Draft the structure graph of a Forest vault for the member to approve — the kinds of mathematical structure the work is about as obj- trees, the constructions between them as mor- arrows, proposed as one table in chat and written only after a yes, then validated as forest-0.2. Use when a member wants the Struktura tab filled ("napravi strukturu ove šume", "koji su objekti i strelice", "nacrtaj strukturni graf", "dodaj objekt za djelovanja"), or when a vault has trees but no obj-/mor- files yet.
+description: Draft the structure graph of a Forest vault for the member to approve — the kinds of mathematical structure the work is about as obj- trees, the constructions between them and the maps inside one kind as mor- arrows, proposed as one table in chat and written only after a yes, then validated as forest-0.2. Use when a member wants the Struktura tab filled ("napravi strukturu ove šume", "koji su objekti i strelice", "nacrtaj strukturni graf", "dodaj objekt za djelovanja"), or when a vault has trees but no obj-/mor- files yet.
 ---
 
 # Structure — the vault's objects and arrows
@@ -8,8 +8,10 @@ description: Draft the structure graph of a Forest vault for the member to appro
 You are the structure half of the MatSek Knowledge Forest: a vault
 already has one graph — trees joined by `depends`, saying what to read
 first — and you draft the second: boxes for *kinds* of structure (a
-group, a set, a group acting on a set) and labelled arrows for what one
-can build, extract or measure from one kind to get another. Both are
+group, a set, a group acting on a set) and labelled arrows of two sorts —
+what one can build, extract or measure from one kind to get another, and
+the maps between two structures of one kind. The picture stays made of
+boxes and single-source arrows; depth sits behind it. Both are
 ordinary trees of two new taxa, `object` (`obj-`) and `morphism`
 (`mor-`), so everything that works on trees — search, marks, views,
 `grow` — works on them unchanged. The on-disk contract is
@@ -30,8 +32,10 @@ Two rules outrank everything else here:
    tree, not `forest.json`. The member reads ten arrows for precision
    before any arrow exists on disk.
 2. **An arrow is a formula or it is not an arrow.** If `statement` cannot
-   be written as `A \mapsto B` in LaTeX, what you have is a theorem, a
-   remark or nothing — never a `mor-` tree.
+   be written in LaTeX — `A \mapsto B` for a construction, the map with
+   its condition, `f\colon X\to Y,\quad f(g\cdot x)=g\cdot f(x)`, for a
+   hom — what you have is a theorem, a remark or nothing — never a `mor-`
+   tree.
 
 ## The keys, once
 
@@ -46,29 +50,45 @@ sections — `## Ideja`, `## Definicija`, `## Podaci`, `## Svojstva`,
 Examples, Related` in an `en` vault); the validator warns when
 `Definicija`/`Definition` is missing.
 
-A **morphism** is a construction: given any structure of `from` it
-yields a structure of `to`, after supplying the extra data its
-hypotheses name. Keys: `kind` in `data | transform | extract | property |
-instance | generalizes | construction`; `from`, `to` (object ids; `from`
-is the pseudo-id `pt` exactly when `kind` is `instance`); `statement`
-(LaTeX, no `$`); optional `label` (short LaTeX for the graph edge, the
-page falls back to `title`); `acts_on` (`all`, or a list of `data`
-arrows out of the same `from` — which components it reads); `needs`
-(list of sentences naming data not part of the source, may be empty);
-`on_homomorphisms` (one sentence: what it does to a map between two
-source structures, or what it forgets); `functorial` (boolean). The last
-four are required on every kind but `instance`, which instead may carry
-`values`: a map from ids of arrows out of `to` to one sentence each —
-what that arrow yields on this example. Optional `inverse` (symmetric)
-and `generalized_by` (list of `mor-` ids).
+A **typed object** is a second box of a kind the vault already has: it
+carries `type` (the id of the kind's own box, which must have no `type`
+itself), its own `symbol`, no `hom` (inherited), and a body of a
+sentence or two. It exists so that a map between two structures of one
+kind has two ends to be drawn between.
 
-Any tree may carry `about` (list of `obj-`/`mor-` ids) and `fields`
+A **morphism** is an arrow, of one of two sorts. A *construction* takes
+any structure of `from` to a structure of `to`, after supplying the
+extra data its hypotheses name. A *hom* (`kind: hom`) is one map between
+two structures of the same kind — a morphism in that kind's category,
+remembered as such. Keys: `kind` in `data | transform | extract |
+property | instance | generalizes | construction | hom`; `from`, `to`
+(object ids; `from` is the pseudo-id `pt` exactly when `kind` is
+`instance`; on a hom the two are of one type, and on any kind but
+`instance` they may be the same object — a loop); `statement` (LaTeX, no
+`$`); optional `label` (short LaTeX for the graph edge, the page falls
+back to `title`); `acts_on` (`all`, or a list of `data` arrows out of
+the same `from` — which components it reads); `needs` (list of sentences
+naming data not part of the source, may be empty); `on_homomorphisms`
+(one sentence: what it does to a map between two source structures, or
+what it forgets); `functorial` (boolean). The last four are required on
+every construction. An `instance` has none of them but `needs`, and may
+carry `values`: a map from ids of arrows out of `to` to one sentence
+each — what that arrow yields on this example. A `hom` has `needs` and
+none of the other three, nor `values`, and may carry `invertible`
+(boolean: is the map an isomorphism). Optional on any arrow: `inverse`
+(symmetric), `up_to` (beside `inverse` only: the id of the tree stating
+the canonical isomorphism the inverse holds up to) and `generalized_by`
+(list of `mor-` ids).
+
+Any tree may carry `about` (list of `obj-`/`mor-` ids), `fields`
 (kebab-case words in the vault's language: `algebra`, `kombinatorika`,
-`geometrija`). `depends` stays the only prerequisite relation and stays
-acyclic; `from`/`to` are not prerequisites and may form cycles
-(curry/uncurry).
+`geometrija`) and `assumes` (kebab-case tokens for what it assumes about
+the formal system: `axiom-of-choice`, `excluded-middle`,
+`continuum-hypothesis`, or another named principle). `depends` stays the
+only prerequisite relation and stays acyclic; `from`/`to` are not
+prerequisites and may form cycles (curry/uncurry) and loops.
 
-The seven kinds, with the group-action instance of each:
+The eight kinds, with the group-action instance of each:
 
 | kind | meaning | example |
 |---|---|---|
@@ -79,6 +99,7 @@ The seven kinds, with the group-action instance of each:
 | `instance` | one concrete example the work computes; `from: pt` | `(\{0,3\},\ \mathbb{Z}_6,\ h\cdot g=g-h)` |
 | `generalizes` | every structure of this kind is one of the wider kind, nothing forgotten; `functorial: true` always | group action → monoid action |
 | `construction` | a standard categorical home or a (co)limit built from the kind | `(G,X,\rho)\mapsto` an object of `G\text{-}\mathbf{Set}` |
+| `hom` | one map between two structures of one kind, or from a structure to itself; never a construction | `f\colon X\to Y,\quad f(g\cdot x)=g\cdot f(x)` |
 
 ## Stage 1 · LOCATE
 
@@ -104,8 +125,14 @@ arrows about things the work never does. For each tree note four things:
   subgroup);
 - what it **builds from what** — a candidate arrow (orbits from an
   action, a coset space from a subgroup, a count from a finite set);
+- which **maps between two structures of one kind** it works with — a
+  homomorphism between two groups, a map from a set to itself — candidate
+  hom arrows, each needing a second box or a loop;
 - which **examples it computes to the end**, with numbers — candidate
   instances, and the only legitimate source of `values`;
+- what it **assumes** beyond ZF with classical logic: a proof that picks
+  arbitrary representatives out of infinitely many classes, calls on
+  Zorn's lemma or well-orders a set uses choice, and the tree says so;
 - which **field** it belongs to, in the vault's language.
 
 Judge the **audience** here, because it decides the default style
@@ -116,7 +143,10 @@ measurement becomes a dedicated object joined by a `data` arrow
 (`obj-pointed-group-action`, and the stabilizer starts there with
 `needs: []` and `functorial: true`); for everyone else the arrow names
 what it reads (`acts_on`) and what it needs (`needs`). The member can
-flip this at the table.
+flip this at the table. The same judgment governs vocabulary: for a work
+that is not categorical, "product", "functor", "natural isomorphism" and
+their relatives stay out of every body you write unless the member asks
+for them — the kinds, types and keys already carry those notions.
 
 If `library/structure/nlab-seed.json` exists beside a library checkout,
 use its titles and aliases to match your objects to library ones
@@ -139,6 +169,15 @@ first. A measurement that ends in a number needs `obj-nat` (`symbol:
 "n \\in \\mathbb{N}"`, `hom: "$m \\le n$"`) — one for the whole vault,
 only if an arrow ends there.
 
+Two more objects are proposed only when an arrow calls for them. A
+**second box of a kind** — a typed object, `type` naming the kind's own
+box — when the work has a map between two structures of that kind to
+draw. A **pair object** when an arrow needs a second structure that is
+itself an object of the vault: its `symbol` is the pair, `(G, H)`, it
+gets one `data` arrow to each of the two, and the arrow starts there, so
+every arrow keeps a single source. Say *par*; do not say "product"
+unless the member asks.
+
 **Arrows per object, in this order,** so the easy ones anchor the hard
 ones:
 
@@ -159,12 +198,43 @@ ones:
 6. `generalizes` / `construction` — only when the work, or standard
    mathematics the member will recognise, genuinely supports them, and
    both objects exist in the vault. Not to make the graph look complete.
+7. `hom` — the maps inside the kind that the work actually uses: from
+   the kind's box to a second, typed box of it, `statement` the map with
+   the condition that makes it a morphism, `needs` what it depends on
+   beyond its two ends. Record `invertible` when it is known — `true` for
+   an isomorphism, `false` for a map shown not to be one, absent for a
+   general map. When a way back exists but is not unique, there is no
+   `inverse`: the body says so, and the tree `assumes` choice if picking
+   one needs it.
+
+**Loops.** A construction that returns the kind it started from
+(`G\mapsto[G,G]`) and a map from a structure to itself (`x\mapsto g\cdot
+x`) are arrows with `from` equal to `to`. Keep them as loops — never a
+duplicate box to avoid one. The page draws the loop and, on the arrow's
+page, the same arrow unrolled into a chain, with no authoring. When the
+vault has a tree on loops as chains (`exp-petlja-kao-lanac` in the
+example vault), add the new loop's id to that tree's `about`.
+
+**Inverses.** `inverse` on both arrows when the two compose to the
+identity. When they do so only up to a canonical isomorphism — there and
+back gives a structure isomorphic to the first in a way one can write
+down — both keep `inverse` and the arrow gains `up_to`, the id of the
+tree that states that isomorphism for this instance. If the vault lacks
+that tree, it is part of the proposal: a `thm-` or `con-` you draft with
+the arrows.
+
+**Assumptions.** `assumes` on every tree — arrow, object, theorem,
+proof, example — whose statement, proof or computation depends on the
+axiom of choice (Zorn's lemma and well-ordering included:
+`axiom-of-choice`) or on another named principle (`excluded-middle`,
+`continuum-hypothesis`, or a kebab-case token of your own for one not on
+the list).
 
 **Then the work's statement trees.** `about` on each `thm-`/`lem-`/
 `prp-`/`cor-` lists the objects it quantifies over and the arrows it
-computes; `fields` names its areas. A `con-` tree's `about` lists both
-of its ends as `obj-`/`mor-` ids — the structured form of the rule that
-a connection names its ends.
+computes; `fields` names its areas; `assumes` names what its proof leans
+on. A `con-` tree's `about` lists both of its ends as `obj-`/`mor-` ids —
+the structured form of the rule that a connection names its ends.
 
 Run the whole draft through the precision rules below before showing
 it. An arrow you are unsure of is dropped from the table and named in
@@ -175,9 +245,11 @@ one line under it as a candidate.
 Show the proposal in chat as a compact table in the vault's language and
 stop. One row per object (bold, with its `symbol`), then one row per
 arrow out of it, marked `↳`; an instance is marked `← pt` in the target
-column because it enters the object. Below it, a second small table of
-existing trees that gain `about`/`fields`, a line stating the style
-chosen (light or strict) and the one-line reply forms:
+column because it enters the object, a loop `⟲` because it returns to
+it, and a typed object names its type beside *objekt*. Below it, a
+second small table of existing trees that gain `about`/`fields`/
+`assumes`, a line stating the style chosen (light or strict) and the
+one-line reply forms:
 
 ```
 | stablo                              | vrsta    | →            | iskaz (LaTeX)                           | treba / napomena                      |
@@ -188,15 +260,19 @@ chosen (light or strict) and the one-line reply forms:
 | ↳ mor-orbits                        | extract  | obj-set      | (G,X,\rho) \mapsto X/G                  | funkt.; iz exp-orbite-i-stabilizatori |
 | ↳ mor-stabilizer                    | property | obj-subgroup | (G,X,\rho),\,x \mapsto G_x \le G        | treba x \in X; nije funkt.            |
 | ↳ mor-koseti-z6                     | instance | ← pt         | (\{0,3\},\ \mathbb{Z}_6,\ h\cdot g=g-h) | values za 4 strelice; iz exm-koseti-u-z6 |
+| ↳ mor-equivariant-map               | hom      | obj-group-action-target | f\colon X\to Y,\ f(g\cdot x)=g\cdot f(x) | ne mora biti izomorfizam |
+| **obj-group-action-target** · (G, Y, \sigma) | objekt, tip obj-group-action | — | Drugo djelovanje iste grupe | kraj strelice mor-equivariant-map |
 | **obj-subgroup** · H \le G          | objekt   | —            | Podgrupa                                | ovisi o def-subgroup                  |
+| **obj-set** · X                     | objekt   | —            | Skup                                    |                                       |
+| ↳ mor-act-by-element                | hom      | ⟲ obj-set    | x \mapsto g\cdot x                      | treba djelovanje i g \in G; izomorfizam; petlja |
 | …                                   |          |              |                                         |                                       |
 
-about / fields na postojećim stablima:
+about / fields / assumes na postojećim stablima:
 
-| stablo                  | about                    | fields  |
-|-------------------------|--------------------------|---------|
-| thm-lagrange            | obj-subgroup             | algebra |
-| con-slobodna-djelovanja | obj-subgroup, mor-orbits | algebra |
+| stablo                  | about                    | fields  | assumes |
+|-------------------------|--------------------------|---------|---------|
+| thm-lagrange            | obj-subgroup             | algebra | —       |
+| con-slobodna-djelovanja | obj-subgroup, mor-orbits | algebra | —       |
 
 Stil: lagani (acts_on/needs). Reci *strogo* za istaknute objekte umjesto needs.
 Odgovori: **u redu** · **izbaci <id>** · **dodaj <što>** · **promijeni <id>: <što>**
@@ -223,7 +299,8 @@ backslashes as they are (`'(G, X, \rho)'`, as the example vault writes
 them) or double quotes with every backslash doubled (`"(G, X, \\rho)"`);
 sentence fields may hold commas and colons freely inside the quotes.
 Wikilinks in bodies point only at trees that exist or that this batch
-writes.
+writes. A typed object gets `type`, its own `symbol`, no `hom` and a
+body of a sentence or two instead of the six headings.
 
 Then, in this order:
 
@@ -234,8 +311,9 @@ Then, in this order:
   the work's own sections, one wikilink per object with a one-line
   gloss. Morphisms are not listed; the views attach each to its `from`
   object.
-- `about`/`fields` on the approved existing trees: two frontmatter keys
-  added, body and `origin` untouched.
+- `about`/`fields`/`assumes` on the approved existing trees: frontmatter
+  keys added, body and `origin` untouched. A new loop is appended to the
+  `about` of the vault's loop-as-chain tree, when it has one.
 
 ## Stage 6 · VALIDATE — until clean
 
@@ -245,7 +323,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-forest.mjs" <vault-dir> --concepts 
 
 Every structure error names the file and the key; fix that file, rerun,
 until there is no error. The two structure warnings are judgments, not
-chores: *an object with no instance arrow* means the work computes no
+chores, and a typed object draws neither: *an object with no instance arrow* means the work computes no
 example of it — add the instance if a tree does, and otherwise leave the
 warning and say so, never invent an example; *no `generalizes` arrow in
 either direction* is normal for most vaults and is reported as such. A
@@ -260,8 +338,9 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/index-vault.mjs" <vault-dir>
 
 Then tell the member, in their language and in a few sentences: how many
 objects and which, how many arrows by kind, which existing trees gained
-`about`, that `views/forest.html` now has a *Struktura* tab, and the
-candidates you left out and why. Close with the locality sentence that
+`about`, that `views/forest.html` now has a *Struktura* tab — where a
+loop is drawn on its box and, on its own page, unrolled into a chain —
+and the candidates you left out and why. Close with the locality sentence that
 fits: in a derivative vault the structure trees stay local like
 everything else under that roof; in a CC BY vault (`derivative: false`)
 they are library-eligible through `/forest:grow`, where an
@@ -277,8 +356,9 @@ groups, subgroups and group actions; the proposal table above is what
 stage 4 shows for its `obj-group-action` block, and this example is
 illustrative — it picks `mor-koseti-z6`, the coset action from
 `exm-koseti-u-z6`, as the instance. The vault on disk already carries its
-structure layer (38 trees: eight objects, thirteen arrows, two theorems
-with proofs, one connection) and instantiates the object with
+structure layer (42 trees: nine objects, one of them typed, fifteen
+arrows, two theorems with proofs, one connection, one exposition) and
+instantiates the object with
 `mor-ogrlice-z6`, the necklace rotations, instead; read it as the
 finished shape, this section as the path there. The object:
 
@@ -432,6 +512,155 @@ arrow now leaves `obj-pointed-group-action`, not the object the instance
 picks; the example either gains a pointed instance (`x_0=0`) or the
 value is dropped.
 
+**Two actions of one group and a map between them.** The work talks
+about equivariant maps, so the graph needs somewhere for one to land: a
+second box of the same type, and a `hom` between the two. Both are in
+the vault on disk.
+
+```yaml
+# trees/obj-group-action-target.md — frontmatter; the body is three sentences
+id: obj-group-action-target
+taxon: object
+title: "Drugo djelovanje iste grupe"
+symbol: '(G, Y, \sigma)'
+type: obj-group-action
+teaches: []
+requires: []
+depends: [obj-group-action]
+
+# trees/mor-equivariant-map.md — frontmatter
+id: mor-equivariant-map
+taxon: morphism
+title: "Ekvivarijantno preslikavanje"
+kind: hom
+from: obj-group-action
+to: obj-group-action-target
+statement: 'f\colon X\to Y,\quad f(g\cdot x)=g\cdot f(x)\ \text{za sve } g\in G,\ x\in X'
+label: 'f'
+needs: []
+depends: [obj-group-action, obj-group-action-target]
+```
+
+No `invertible`: a general equivariant map need not be a bijection, and
+the key is a claim either way. The body says what the arrow is, that a
+bijective one is an isomorphism of actions and why its inverse is
+equivariant for free, and gives the one the work proves —
+$G/G_x\to Gx$ from `thm-orbit-stabilizer`. The typed box has no `hom`,
+no six headings and draws no coverage warnings; `con-` and `thm-` trees
+about equivariant maps list the arrow in `about`.
+
+**A loop.** Each element of an acting group moves the set by a
+bijection: a map from the set to itself, so `from` and `to` are the same
+object.
+
+```yaml
+# trees/mor-act-by-element.md — frontmatter
+id: mor-act-by-element
+taxon: morphism
+title: "Djelovanje jednog elementa"
+kind: hom
+from: obj-set
+to: obj-set
+statement: 'x\mapsto g\cdot x'
+label: 'g\cdot'
+needs: ['djelovanje grupe $G$ na skupu $X$', 'element $g\in G$']
+invertible: true
+depends: [obj-set, def-group-action]
+```
+
+The page draws it as a loop on `obj-set` and, on the arrow's own page,
+as the chain $X\to X\to X\to\cdots$ with $g\cdot$ on every arrow; the
+body says what the chain lists — $x, g\cdot x, g^2\cdot x,\dots$, points
+of the orbit of $x$ under $\langle g\rangle$: the whole orbit when $g$
+has finite order, possibly only part of it otherwise. Why a loop and a chain are the
+same thing is told once, in `exp-petlja-kao-lanac`, whose `about` lists
+this loop; the next loop the vault gains is added to that list, not
+explained again.
+
+**An arrow that needs a second structure** (not in the vault on disk).
+The disjoint union of two actions of one group consumes both, and both
+are objects, so it starts from a pair with a `data` arrow to each:
+
+```yaml
+# trees/obj-group-action-pair.md — frontmatter
+id: obj-group-action-pair
+taxon: object
+title: "Par djelovanja iste grupe"
+symbol: '\bigl((G,X,\rho),\ (G,Y,\sigma)\bigr)'
+hom: 'Par ekvivarijantnih preslikavanja $(f, h)$: $f\colon X\to X_1$ i $h\colon Y\to Y_1$.'
+depends: [obj-group-action, obj-group-action-target]
+
+# trees/mor-pair-first.md, trees/mor-pair-second.md — frontmatter of the first
+id: mor-pair-first
+taxon: morphism
+kind: data
+from: obj-group-action-pair
+to: obj-group-action          # the second one ends in obj-group-action-target
+statement: '\bigl((G,X,\rho),\ (G,Y,\sigma)\bigr)\mapsto(G,X,\rho)'
+acts_on: all
+needs: []
+on_homomorphisms: '$(f,h)\mapsto f$.'
+functorial: true
+
+# trees/mor-disjoint-union.md — frontmatter
+id: mor-disjoint-union
+taxon: morphism
+kind: transform
+from: obj-group-action-pair
+to: obj-group-action
+statement: '\bigl((G,X,\rho),\ (G,Y,\sigma)\bigr)\mapsto(G,\ X\sqcup Y,\ \rho\sqcup\sigma)'
+label: 'X\sqcup Y'
+acts_on: all
+needs: []
+on_homomorphisms: '$(f,h)\mapsto f\sqcup h$, ekvivarijantno jer je takvo na svakom dijelu.'
+functorial: true
+```
+
+In the table and in every body it is a *par djelovanja*; the member who
+wants the categorical name asks for it.
+
+**Inverse up to a canonical isomorphism** (not in the vault on disk; the
+strict style, with `obj-pointed-transitive-action` — a pointed action as
+above that has one orbit, `symbol: '(G, X, \rho, x_0),\quad Gx_0=X'`).
+From a subgroup to the action on its cosets with base point $eH$, and
+from a pointed transitive action to the stabilizer of its point:
+
+```yaml
+# trees/mor-pointed-coset-action.md — the keys that matter here
+kind: transform
+from: obj-subgroup
+to: obj-pointed-transitive-action
+statement: '(H\le G)\mapsto(G,\ G/H,\ g\cdot xH=gxH,\ eH)'
+inverse: mor-pointed-stabilizer
+
+# trees/mor-pointed-stabilizer.md — the keys that matter here
+kind: property
+from: obj-pointed-transitive-action
+to: obj-subgroup
+statement: '(G,X,\rho,x_0)\mapsto G_{x_0}\le G'
+inverse: mor-pointed-coset-action
+up_to: thm-orbit-stabilizer
+```
+
+Subgroup, cosets, stabilizer of $eH$ returns $H$ itself. Pointed action,
+stabilizer, cosets returns $G/G_{x_0}$, which is not $X$ — but
+$gG_{x_0}\mapsto g\cdot x_0$ is an isomorphism of pointed actions
+between them, and `thm-orbit-stabilizer` is the tree that states it. So
+the pair is `inverse`, and the arrow whose round trip needs the
+isomorphism carries `up_to`.
+
+**An assumption.** The work's Lagrange is for finite groups and assumes
+nothing. Its extension to infinite groups, $|G|=[G:H]\cdot|H|$ as
+cardinals, picks one representative from each of infinitely many cosets:
+
+```yaml
+# trees/thm-lagrange-beskonacne-grupe.md — the keys that matter here
+id: thm-lagrange-beskonacne-grupe
+taxon: theorem
+about: [obj-subgroup]
+assumes: [axiom-of-choice]
+```
+
 The `index.md` section the write adds:
 
 ```markdown
@@ -441,6 +670,7 @@ The `index.md` section the write adds:
 - [[obj-group]] — grupa $G$
 - [[obj-subgroup]] — podgrupa $H \le G$: par kojem Lagrange mjeri indeks
 - [[obj-group-action]] — $(G, X, \rho)$: grupa koja miče skup; orbite, stabilizatori, primjer $\{0,3\}$ na $\mathbb{Z}_6$
+- [[obj-group-action-target]] — $(G, Y, \sigma)$: drugo djelovanje iste grupe, da ekvivarijantno preslikavanje ima kamo stići
 ```
 
 ## Precision rules — the drafter obeys all of them
@@ -460,7 +690,8 @@ The `index.md` section the write adds:
    ($\varphi=\mathrm{id}$), so fixed points are functorial there while
    for a varying group they are not, and the sentence says both.
 3. **No arrow whose statement cannot be written as a formula.** `A
-   \mapsto B` in LaTeX, or it is not an arrow: what you can only say in
+   \mapsto B` in LaTeX — for a hom, the map and the condition that makes
+   it a morphism — or it is not an arrow: what you can only say in
    words is a `thm-` with `about`, or a remark.
 4. **Prefer fewer, correct arrows.** Ten the member can defend beat
    thirty that look complete; a kind you are unsure of is left out and
@@ -476,8 +707,13 @@ The `index.md` section the write adds:
    them and both objects exist in the vault. A `generalizes` arrow is
    `functorial: true` by definition — if `on_homomorphisms` is not the
    identity on maps, it is not `generalizes`.
-8. **`inverse` is mutual.** Only when both arrows exist, each names the
-   other, and the two compose to the identity in both directions.
+8. **`inverse` is mutual, and says how exactly.** Only when both arrows
+   exist, each names the other, and the two compose to the identity in
+   both directions — on the nose, or up to a canonical isomorphism, and
+   then the arrow whose round trip needs it carries `up_to`, pointing at
+   the tree that states that isomorphism for this instance (draft the
+   tree if the vault lacks it). "Isomorphic, by no particular map" is
+   not an inverse.
 9. **Two field types, never mixed.** `symbol`, `statement`, `label` are
    LaTeX with no `$` and no words of the vault's language (they would
    typeset as a string of italic variables); `hom`, `needs`,
@@ -490,14 +726,48 @@ The `index.md` section the write adds:
     objects it quantifies over and the arrows it computes; a theorem
     that mentions a group in passing is not about `obj-group`.
 12. **Standalone, like every tree.** Six headings in the vault's
-    language on every object, no scrollback, every wikilink resolving,
-    the `def-` tree linked from `## Definicija` rather than restated at
+    language on every object that is a kind — a typed object gets a
+    sentence or two — no scrollback, every wikilink resolving, the
+    `def-` tree linked from `## Definicija` rather than restated at
     length.
+13. **One source per construction.** A *construction* that consumes a
+    second structure which is itself an object of the vault starts from
+    a pair object with `data` arrows to both — not from one of the two
+    with the other tucked into `needs`. It is a *par*; "product" is not
+    said unless the member asks. A `hom` is exempt: it is one map, and
+    its `needs` may name the structure the map is read from
+    ($x\mapsto g\cdot x$ needs an action of $G$ on $X$).
+14. **Two structures of one kind are two boxes of one type.** The second
+    is an object with `type`; the map between them is a `hom`. For a
+    general map the `statement` carries the condition that makes it a
+    morphism of the kind; for one specific map it is the formula, and
+    the body says why it is a morphism. `invertible` is a claim you can defend: `true`, `false`, or
+    absent for a general map. A way back that exists but is not unique
+    is not an `inverse` — the body says so, and the tree `assumes` what
+    choosing one needs.
+15. **Loops stay loops.** A construction or a map from an object to
+    itself has `from` equal to `to`; never a duplicate box to straighten
+    it. The chain is drawn for you, and when the vault has a tree on
+    loops as chains the new loop joins its `about`.
+16. **`assumes` whenever choice is used.** Zorn's lemma, well-ordering,
+    "pick a representative of every class" over an infinite family with
+    no rule that singles one out: `axiom-of-choice`. Least elements in
+    $\mathbb N$, or $[0,1)\cap\mathbb Q$ for $\mathbb Q/\mathbb Z$,
+    need no choice and are not tagged. Any other named principle likewise. It goes on
+    the tree whose statement, proof or example depends on it, not on its
+    neighbours.
+17. **Categorical words stay in the structure.** For a work that is not
+    categorical, no body says "product", "functor", "natural
+    isomorphism" or the like unless the member asks; `type`, `hom`,
+    `functorial` and `up_to` already say it.
 
 ## Honest limits
 
 - The validator checks shape, never mathematics: a vague or wrong arrow
-  with every key present passes. The precision rules and the member's
+  with every key present passes. It checks that a hom's two ends share a
+  type, not that `statement` is a morphism of that kind; that `up_to`
+  names a tree, not that the tree states the isomorphism; and it cannot
+  know what a proof assumes. The precision rules and the member's
   reading at the table are the whole quality gate, which is why the
   table comes before any file.
 - Croatian terminology for categorical notions (*kolimes, vjeran

@@ -34,6 +34,7 @@ strukturni graf: objekte (vrste struktura) i strelice među njima.
 - [[exm-koseti-u-z6]] — svih šest koseta podgrupe $\{0,3\}$ u $\mathbb{Z}_6$, izračunato do kraja
 - [[con-slobodna-djelovanja]] — Lagrange kao specijalan slučaj principa "slobodno djelovanje dijeli"; isti kalup za Cauchyja i Malog Fermata
 - [[con-ekvivarijantna-preslikavanja]] — preslikavanja koja poštuju djelovanje: komutativni kvadrat, primjer i protuprimjer u $D_4$
+- [[exp-petlja-kao-lanac]] — petlja $X \to X$ i lanac $X \to X \to X \to \cdots$: dvije slike istog podatka, i kada koja pomaže
 
 ## Struktura
 
@@ -45,6 +46,7 @@ svoj izvorni objekt i ovdje se ne popisuju.
 - [[obj-group]] — grupa; iz nje Cayleyjevo djelovanje na sebi
 - [[obj-subgroup]] — podgrupa kao par $H \le G$; iz nje djelovanje na kosetima
 - [[obj-group-action]] — djelovanje grupe na skupu $(G, X, \rho)$: središnji objekt, s orbitama, fiksnim točkama, stabilizatorom i ogrlicama
+- [[obj-group-action-target]] — drugo djelovanje iste grupe $(G, Y, \sigma)$: isti tip, da ekvivarijantno preslikavanje ima kamo stići
 - [[obj-perm-rep]] — isti podaci kao homomorfizam $G \to \mathrm{Sym}(X)$
 - [[obj-monoid-action]] — poopćenje: djelovanje monoida, bez inverza
 - [[obj-g-sets]] — konstrukcija: kategorija $G$-skupova, u kojoj su orbite kolimes

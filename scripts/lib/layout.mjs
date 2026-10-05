@@ -216,12 +216,14 @@ export function layoutGroup(memberIds, trees, edges, proofsOf, { showExr, showPr
 // ----------------------------------------------------------- structure graph
 
 // Arrow kinds that become edges of the Struktura tab; instances are listed
-// under their object instead. The first four say which way a construction
-// "reads" — from a structure to what you take from it — so the cycle walk
-// follows them first and reverses the others when it must.
-export const EDGE_KINDS = ["data", "extract", "property", "transform", "construction", "generalizes"];
+// under their object instead. The first five say which way an arrow "reads"
+// — a construction from a structure to what you take from it, a hom from its
+// source to its target — so the cycle walk follows them first and reverses
+// the others when it must. An arrow from a box to itself is drawn as a loop
+// and takes no part in the layering.
+export const EDGE_KINDS = ["data", "extract", "property", "transform", "hom", "construction", "generalizes"];
 const KIND_RANK = Object.fromEntries(EDGE_KINDS.map((k, i) => [k, i]));
-const isForward = (kind) => KIND_RANK[kind] <= KIND_RANK.transform;
+const isForward = (kind) => KIND_RANK[kind] <= KIND_RANK.hom;
 
 // Instance chips hang under their object's box.
 export const INST_H = 22;

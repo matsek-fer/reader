@@ -17,8 +17,8 @@ graph TD
     g0["1 · Temelji (4)"]
     g1["2 · Teorem i dokazi (4)"]
     g2["3 · Djelovanja: drugi motor (6)"]
-    g3["4 · Primjer i veza (3)"]
-    g4["Struktura (21)"]
+    g3["4 · Primjer i veza (4)"]
+    g4["Struktura (24)"]
     g0 --> g1
     g0 --> g2
     g0 --> g3
@@ -88,11 +88,13 @@ graph TD
     exm_koseti_u_z6["exm-koseti-u-z6"]
     con_slobodna_djelovanja["con-slobodna-djelovanja"]
     con_ekvivarijantna_preslikavanja["con-ekvivarijantna-preslikavanja"]
+    exp_petlja_kao_lanac["exp-petlja-kao-lanac"]
 ```
 
 - [[exm-koseti-u-z6]] — Koseti podgrupe {0, 3} u Z₆
 - [[con-slobodna-djelovanja]] — Lagrange kao specijalan slučaj slobodnih djelovanja
 - [[con-ekvivarijantna-preslikavanja]] — Ekvivarijantna preslikavanja: morfizmi među djelovanjima
+- [[exp-petlja-kao-lanac]] — Petlja kao lanac
 
 ## Struktura
 
@@ -103,16 +105,17 @@ graph TD
     obj_group["obj-group"]
     obj_subgroup["obj-subgroup"]
     obj_group_action["obj-group-action"]
+    obj_group_action_target["obj-group-action-target"]
     obj_perm_rep["obj-perm-rep"]
     obj_monoid_action["obj-monoid-action"]
     obj_g_sets["obj-g-sets"]
+    mor_act_by_element["mor-act-by-element"]
     mor_action_group["mor-action-group"]
     mor_action_set["mor-action-set"]
     mor_cayley["mor-cayley"]
     mor_coset_action["mor-coset-action"]
     mor_curry["mor-curry"]
-    mor_fixed_points["mor-fixed-points"]
-    mor_g_sets["mor-g-sets"]
+    obj_set --> mor_act_by_element
     obj_group_action --> mor_action_group
     obj_group_action --> mor_action_set
     obj_group_action --> mor_cayley
@@ -120,10 +123,9 @@ graph TD
     obj_subgroup --> mor_coset_action
     obj_group_action --> mor_curry
     obj_perm_rep --> mor_curry
-    obj_group_action --> mor_fixed_points
-    obj_g_sets --> mor_g_sets
     obj_group --> obj_group_action
     obj_set --> obj_group_action
+    obj_group_action --> obj_group_action_target
     obj_group_action --> obj_monoid_action
     obj_group --> obj_perm_rep
     obj_set --> obj_perm_rep
@@ -132,6 +134,9 @@ graph TD
 
 ```mermaid
 graph TD
+    mor_equivariant_map["mor-equivariant-map"]
+    mor_fixed_points["mor-fixed-points"]
+    mor_g_sets["mor-g-sets"]
     mor_monoid_action["mor-monoid-action"]
     mor_ogrlice_z6["mor-ogrlice-z6"]
     mor_orbit_count["mor-orbit-count"]
@@ -146,14 +151,17 @@ graph TD
 - [[obj-group]] — Grupa
 - [[obj-subgroup]] — Podgrupa
 - [[obj-group-action]] — Djelovanje grupe na skupu
+- [[obj-group-action-target]] — Drugo djelovanje iste grupe
 - [[obj-perm-rep]] — Permutacijska reprezentacija
 - [[obj-monoid-action]] — Djelovanje monoida na skupu
 - [[obj-g-sets]] — Kategorija G-skupova
+- [[mor-act-by-element]] — Djelovanje jednog elementa
 - [[mor-action-group]] — Grupa koja djeluje
 - [[mor-action-set]] — Skup na kojem se djeluje
 - [[mor-cayley]] — Grupa djeluje na sebi: Cayleyjevo djelovanje
 - [[mor-coset-action]] — Djelovanje na kosetima
 - [[mor-curry]] — Djelovanje kao homomorfizam u Sym(X)
+- [[mor-equivariant-map]] — Ekvivarijantno preslikavanje
 - [[mor-fixed-points]] — Fiksne točke
 - [[mor-g-sets]] — Djelovanje kao objekt kategorije G-skupova
 - [[mor-monoid-action]] — Djelovanje grupe kao djelovanje monoida

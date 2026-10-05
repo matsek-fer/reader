@@ -63,6 +63,16 @@ test("index-vault SKIP_EMBED writes a well-formed forest-index-0.1", () => {
   const mor = index.items.find((it) => it.id === "mor-orbits");
   assert.equal(mor.taxon, "morphism");
   assert.equal(mor.group, "Struktura");
+  // A typed object is listed like any object, and a hom arrow — between two
+  // boxes or a loop on one — follows the object it leaves like any arrow.
+  const typed = index.items.find((it) => it.id === "obj-group-action-target");
+  assert.equal(typed.taxon, "object");
+  assert.equal(typed.group, "Struktura");
+  for (const id of ["mor-equivariant-map", "mor-act-by-element"]) {
+    const hom = index.items.find((it) => it.id === id);
+    assert.equal(hom.taxon, "morphism");
+    assert.equal(hom.group, "Struktura");
+  }
   assert.equal(fs.readFileSync(path.join(vault, "index", "vectors.i8.bin")).length, 0);
 });
 

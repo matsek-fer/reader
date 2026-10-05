@@ -97,3 +97,18 @@ test("index.md order breaks ties inside a column", () => {
   const col = [P, M, S].sort((x, y) => out.pos[x].y - out.pos[y].y);
   assert.deepEqual(col, [S, M, P]);
 });
+
+test("a hom between two boxes is layered like any edge; a loop moves nothing", () => {
+  const T = "obj-group-action-target";
+  const more = [
+    ...arrows,
+    { id: "mor-equivariant-map", from: A, to: T, kind: "hom" },
+    { id: "mor-act-by-element", from: S, to: S, kind: "hom" },
+  ];
+  const out = layoutStructure([A, P, M, S, T], more);
+  assert.ok(out.edges.includes("mor-equivariant-map"));
+  assert.equal(out.layer[T], out.layer[A] + 1);
+  assertLayered(out, more);
+  assert.ok(!out.edges.includes("mor-act-by-element"));
+  assert.deepEqual(out, layoutStructure([A, P, M, S, T], more.filter((a) => a.from !== a.to)));
+});

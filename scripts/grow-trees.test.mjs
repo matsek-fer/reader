@@ -139,3 +139,49 @@ test("an object with nlab and an instance with values round-trip, and id remaps 
   assert.deepEqual(inst.values, {});
   assert.match(r.stderr, /dropped values entry mor-ogrlice-z6 → mor-orbits/);
 });
+
+test("type and up_to are ids: they follow a rename, and up_to goes when it cannot", () => {
+  const base = { teaches: [], requires: [], depends: [], standalone: true, language: "hr", origin: "member" };
+  const group = { id: "obj-group", taxon: "object", title: "Grupa", symbol: "(G, \\cdot)", hom: "Homomorfizam $\\varphi\\colon G\\to H$.", ...base };
+  const second = { id: "obj-group-second", taxon: "object", title: "Druga grupa", symbol: "(H, \\ast)", type: "obj-group", ...base, depends: ["obj-group"] };
+  const map = {
+    id: "mor-homomorphism", taxon: "morphism", title: "Homomorfizam grupa", kind: "hom",
+    from: "obj-group", to: "obj-group-second", statement: "\\varphi\\colon G\\to H", needs: [], invertible: false, ...base,
+  };
+  const dual = {
+    id: "mor-dual", taxon: "morphism", title: "Dualna grupa", kind: "transform",
+    from: "obj-group", to: "obj-group", statement: "G\\mapsto\\widehat G", acts_on: "all",
+    needs: ["$G$ konačna i komutativna"], on_homomorphisms: "Smjer se obrće.", functorial: true,
+    inverse: "mor-dual", up_to: "thm-double-dual", ...base,
+  };
+  const thm = { id: "thm-double-dual", taxon: "theorem", title: "Dvostruki dual", about: ["mor-dual"], ...base };
+  const vault = makeVault([[group, "## Definicija\nGrupa."], [second, "Još jedna."], [map, "Čuva operaciju."], [dual, "Karakteri."], [thm, "Kanonski izomorfizam."]]);
+
+  // The forest already holds other trees under two of the ids, so both are
+  // renamed and every key that names them must follow.
+  const forest = fs.mkdtempSync(path.join(os.tmpdir(), "grow-trees-forest-"));
+  fs.mkdirSync(path.join(forest, "trees"));
+  fs.writeFileSync(path.join(forest, "trees", "obj-group.md"), `---\n${dump({ ...group, hom: "Nešto drugo." })}---\n\nDrugo stablo.\n`);
+  fs.writeFileSync(path.join(forest, "trees", "thm-double-dual.md"), `---\n${dump({ ...thm, title: "Drugi teorem" })}---\n\nDrugo stablo.\n`);
+  const out = path.join(vault, "out");
+  const r = run([vault, forest, "--trees", "obj-group,obj-group-second,mor-homomorphism,mor-dual,thm-double-dual", "--out", out]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(grown(out, "obj-group-second").fm.type, "obj-group-2");
+  const hom = grown(out, "mor-homomorphism").fm;
+  assert.deepEqual([hom.from, hom.to, hom.invertible], ["obj-group-2", "obj-group-second", false]);
+  const pair = grown(out, "mor-dual").fm;
+  assert.deepEqual([pair.inverse, pair.up_to], ["mor-dual", "thm-double-dual-2"]);
+
+  // Into an empty forest, without the theorem and without the type: up_to has
+  // nothing to point at and is dropped; the type is kept and flagged.
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "grow-trees-forest-"));
+  const out2 = path.join(vault, "out2");
+  const r2 = run([vault, empty, "--trees", "obj-group-second,mor-dual", "--out", out2]);
+  assert.equal(r2.status, 0, r2.stderr);
+  const alone = grown(out2, "mor-dual").fm;
+  assert.equal(alone.inverse, "mor-dual");
+  assert.ok(!("up_to" in alone));
+  assert.match(r2.stderr, /dropped up_to mor-dual → thm-double-dual \(unresolvable\)/);
+  assert.equal(grown(out2, "obj-group-second").fm.type, "obj-group");
+  assert.match(r2.stderr, /type obj-group-second → obj-group does not resolve/);
+});
