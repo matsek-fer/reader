@@ -124,7 +124,7 @@ body.tab-structure #slegend { display: flex; }
 .slabel { position: absolute; transform: translate(-50%, -50%); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-size: 12px; line-height: 18px; white-space: nowrap; pointer-events: auto; cursor: pointer; }
 .slabel:hover { border-color: currentColor; }
 .slabel .sep { margin: 0 5px; color: var(--fg-muted); }
-.ssym { position: absolute; font-size: 11px; line-height: 1; color: var(--fg-muted); white-space: nowrap; pointer-events: none; }
+.ssym { position: absolute; font-size: 11px; line-height: 1; color: var(--fg-muted); white-space: nowrap; pointer-events: none; transform-origin: left center; }
 .sedge .line { fill: none; stroke-width: 1.6; }
 .sedge .hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
 .sedge:hover .line { stroke-width: 2.6; }

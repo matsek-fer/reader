@@ -152,7 +152,7 @@ body.tab-structure #slegend { display: flex; }
 .slabel { position: absolute; transform: translate(-50%, -50%); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-size: 12px; line-height: 18px; white-space: nowrap; pointer-events: auto; cursor: pointer; }
 .slabel:hover { border-color: currentColor; }
 .slabel .sep { margin: 0 5px; color: var(--fg-muted); }
-.ssym { position: absolute; font-size: 11px; line-height: 1; color: var(--fg-muted); white-space: nowrap; pointer-events: none; }
+.ssym { position: absolute; font-size: 11px; line-height: 1; color: var(--fg-muted); white-space: nowrap; pointer-events: none; transform-origin: left center; }
 .sedge .line { fill: none; stroke-width: 1.6; }
 .sedge .hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
 .sedge:hover .line { stroke-width: 2.6; }
@@ -729,6 +729,9 @@ body.tab-structure #slegend { display: flex; }
       b.classList.toggle('on', b.getAttribute('data-tab') === name);
     });
     applyView();
+    // Nothing in the layer has a size while it is hidden, so a symbol can
+    // only be measured once the tab is showing.
+    if (st) fitSymbols();
   }
 
   // sTop is how far a loop on a top-row box, and its label, reach over the
@@ -890,10 +893,26 @@ body.tab-structure #slegend { display: flex; }
     });
     S.objects.forEach(function (o) {
       var p = S.pos[o.id];
-      lh += '<span class="ssym" style="left:' + (p.x + 10) + 'px;top:' + (p.y + 24) + 'px">' + o.symbol_html + '</span>';
+      lh += '<span class="ssym" data-id="' + escText(o.id) + '" style="left:' + (p.x + 10) + 'px;top:' + (p.y + 24) + 'px">' + o.symbol_html + '</span>';
     });
     document.getElementById('sedges').innerHTML = eh;
     slabels.innerHTML = lh;
+    fitSymbols();
+  }
+
+  // A symbol is the author's mathematics, so none of it is dropped: one too
+  // wide for its box is scaled down from its left edge until it fits.
+  function fitSymbols() {
+    slabels.querySelectorAll('.ssym').forEach(function (s) {
+      s.style.transform = '';
+      var box = document.querySelector('#slayer .snode[data-id="' + s.getAttribute('data-id') + '"] rect');
+      if (!box) return;
+      // Both rectangles are read on screen, so the view's own pan and zoom
+      // cancel and the ratio is the scale the symbol needs.
+      var sr = s.getBoundingClientRect(), br = box.getBoundingClientRect();
+      var room = br.right - 8 - sr.left;
+      if (sr.width > room && room > 0) s.style.transform = 'scale(' + (room / sr.width).toFixed(3) + ')';
+    });
   }
 
   // A label sits on its own edge. Edges leaving one box take turns at the
