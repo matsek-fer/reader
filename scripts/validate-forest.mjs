@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // validate-forest.mjs — checks a Forest vault against docs/forest-format.md
-// (draft forest-0.1). The doc is normative; where it and this file disagree,
-// the doc wins and this file has a bug.
+// (forest-0.1 and forest-0.2). The doc is normative; where it and this file
+// disagree, the doc wins and this file has a bug.
 //
 // Usage: node scripts/validate-forest.mjs <vault-dir> [--concepts <concepts.yaml>] [--lenient]
 //
@@ -13,7 +13,11 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
 
-const SCHEMA_VERSION = "forest-0.1";
+// A forest-0.1 vault is a forest-0.2 vault with no structure layer: both
+// validate, but the structure taxa and keys are errors under 0.1 so nothing
+// migrates silently.
+const SCHEMA_VERSIONS = ["forest-0.1", "forest-0.2"];
+const STRUCTURE_VERSION = "forest-0.2";
 const NOTICE = "LOKALNO — izvedeno djelo, ne šalje se u knjižnicu";
 // Share-alike sources (GFDL, CC BY-SA): the vault MAY be shared under the
 // source's terms, but still never enters the CC BY library (D-001).
@@ -36,8 +40,32 @@ const PREFIX_TO_TAXON = {
   int: "intuition",
   rem: "remark",
   con: "connection",
+  obj: "object",
+  mor: "morphism",
 };
 const TAXA = new Set(Object.values(PREFIX_TO_TAXON));
+
+// The structure layer (forest-0.2): kinds of structure and the arrows between
+// them. `pt` is the one id that is not a tree — the empty source of an
+// instance arrow.
+const STRUCTURE_TAXA = new Set(["object", "morphism"]);
+const POINT = "pt";
+const MORPHISM_KINDS = new Set([
+  "data",
+  "transform",
+  "extract",
+  "property",
+  "instance",
+  "generalizes",
+  "construction",
+]);
+const BASE_KEYS = ["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin", "language", "digested_from", "proves", "adapted_from"];
+// Any tree may say which objects and arrows it is about, and for which fields.
+const ABOUT_KEYS = ["about", "fields"];
+const OBJECT_KEYS = ["symbol", "hom", "same_as", "nlab"];
+const MORPHISM_KEYS = ["kind", "from", "to", "statement", "label", "acts_on", "needs", "on_homomorphisms", "functorial", "inverse", "generalized_by", "values"];
+const OBJECT_ID = /^obj-[a-z0-9]+(-[a-z0-9]+)*$/;
+const DEFINITION_HEADING = /^##\s+(Definicija|Definition)\s*$/m;
 
 // The taxa a proof can prove. Axioms are assumed, not proved, so they are
 // deliberately not here even though they are formal statements.
@@ -102,8 +130,10 @@ function main() {
   const registry = conceptsPath ? loadRegistry(conceptsPath, err) : null;
   const forest = checkForestJson(vaultDir, err);
   const derivative = forest?.derivative === true;
+  const structure = forest?.schema_version === STRUCTURE_VERSION;
   const trees = loadTrees(vaultDir, err);
-  checkTrees(trees, { derivative, registry, lenient }, err, warn);
+  checkTrees(trees, { derivative, registry, lenient, structure }, err, warn);
+  if (structure) checkStructure(trees, err, warn);
   checkDag(trees, err);
   checkIndex(vaultDir, trees, err, warn);
   checkViews(vaultDir, trees, err, warn);
@@ -184,9 +214,9 @@ function checkForestJson(vaultDir, err) {
     err
   );
 
-  if (forest.schema_version !== SCHEMA_VERSION) {
+  if (!SCHEMA_VERSIONS.includes(forest.schema_version)) {
     err(
-      `${ctx}: schema_version must be "${SCHEMA_VERSION}", got ${JSON.stringify(forest.schema_version)}`
+      `${ctx}: schema_version must be one of ${SCHEMA_VERSIONS.map((v) => `"${v}"`).join(", ")}, got ${JSON.stringify(forest.schema_version)}`
     );
   }
 
@@ -305,17 +335,20 @@ function loadTrees(vaultDir, err) {
   return trees;
 }
 
-function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
+function checkTrees(trees, { derivative, registry, lenient, structure }, err, warn) {
   const conceptProblem = lenient ? warn : err;
 
   for (const t of trees.values()) {
     const { file, stem, fm, body } = t;
-    checkKeys(
-      fm,
-      new Set(["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin", "language", "digested_from", "proves", "adapted_from"]),
-      file,
-      err
-    );
+    // The allowed keys follow the taxon: a 0.1 vault knows only the base set,
+    // so a structure key there is an unknown key, not a half-migrated tree.
+    const allowed = [...BASE_KEYS];
+    if (structure) {
+      allowed.push(...ABOUT_KEYS);
+      if (fm.taxon === "object") allowed.push(...OBJECT_KEYS);
+      if (fm.taxon === "morphism") allowed.push(...MORPHISM_KEYS);
+    }
+    checkKeys(fm, new Set(allowed), file, err);
 
     if (fm.id !== stem) {
       err(`${file}: id ${JSON.stringify(fm.id)} must equal the filename stem "${stem}"`);
@@ -332,6 +365,9 @@ function checkTrees(trees, { derivative, registry, lenient }, err, warn) {
       err(`${file}: invalid taxon ${JSON.stringify(fm.taxon)}`);
     } else if (prefix in PREFIX_TO_TAXON && PREFIX_TO_TAXON[prefix] !== fm.taxon) {
       err(`${file}: taxon "${fm.taxon}" does not match id prefix "${prefix}-" (expected "${PREFIX_TO_TAXON[prefix]}")`);
+    }
+    if (!structure && (STRUCTURE_TAXA.has(fm.taxon) || STRUCTURE_TAXA.has(PREFIX_TO_TAXON[prefix]))) {
+      err(`${file}: taxon "${PREFIX_TO_TAXON[prefix] ?? fm.taxon}" (id prefix "${prefix}-") needs forest.json schema_version "${STRUCTURE_VERSION}" — a forest-0.1 vault has no structure layer`);
     }
 
     if (typeof fm.title !== "string" || fm.title.length === 0) {
@@ -477,6 +513,210 @@ function scrollbackPhrases(body) {
     if (re.test(body)) found.push(phrase);
   }
   return found;
+}
+
+// ------------------------------------------------------------------ structure
+
+// forest-0.2 only. Objects are kinds of structure, morphisms the constructions
+// between them. from/to arrows are not prerequisites and may form cycles
+// (curry/uncurry), so nothing here feeds checkDag — depends still does, and
+// objects and morphisms sit in that DAG like any tree.
+function checkStructure(trees, err, warn) {
+  const treeOfTaxon = (id, taxon) => {
+    const t = typeof id === "string" ? trees.get(id) : undefined;
+    return t && t.fm.taxon === taxon ? t : null;
+  };
+  // LaTeX fields are typeset whole, so a $ inside them is a stray delimiter
+  // that KaTeX would print as an error, not math.
+  const latex = (file, key, v) => {
+    if (typeof v !== "string" || v.trim() === "") {
+      err(`${file}: ${key} must be a non-empty LaTeX string`);
+    } else if (v.includes("$")) {
+      err(`${file}: ${key} must be LaTeX without $ delimiters — it is typeset whole`);
+    }
+  };
+  const sentence = (file, key, v) => {
+    if (typeof v !== "string" || v.trim() === "") {
+      err(`${file}: ${key} must be one sentence (a string; inline $…$ math allowed)`);
+    }
+  };
+
+  for (const t of trees.values()) {
+    const { file, fm } = t;
+
+    if (fm.about !== undefined) {
+      if (!isStringArray(fm.about)) {
+        err(`${file}: about must be an array of obj-/mor- ids`);
+      } else {
+        for (const id of fm.about) {
+          const target = trees.get(id);
+          if (!target) {
+            err(`${file}: about names unknown tree "${id}"`);
+          } else if (!STRUCTURE_TAXA.has(target.fm.taxon)) {
+            err(`${file}: about entry "${id}" is a ${target.fm.taxon}, not an object or morphism`);
+          }
+        }
+      }
+    }
+    if (fm.fields !== undefined && !(isStringArray(fm.fields) && fm.fields.every((f) => KEBAB.test(f)))) {
+      err(`${file}: fields must be an array of kebab-case words (e.g. algebra, kombinatorika)`);
+    }
+
+    if (fm.taxon === "object") checkObject(t);
+    if (fm.taxon === "morphism") checkMorphism(t);
+  }
+
+  // Coverage, as warnings: an object nobody has instantiated or placed among
+  // wider/narrower kinds is a box with no example and no context.
+  const instanced = new Set();
+  const generalized = new Set();
+  for (const t of trees.values()) {
+    if (t.fm.taxon !== "morphism") continue;
+    if (t.fm.kind === "instance") instanced.add(t.fm.to);
+    if (t.fm.kind === "generalizes") {
+      generalized.add(t.fm.from);
+      generalized.add(t.fm.to);
+    }
+  }
+  for (const t of trees.values()) {
+    if (t.fm.taxon !== "object") continue;
+    if (!instanced.has(t.stem)) {
+      warn(`${t.file}: object has no instance arrow (a mor- tree with kind: instance, to: ${t.stem}) — give it an example`);
+    }
+    if (!generalized.has(t.stem)) {
+      warn(`${t.file}: object has no generalizes arrow in either direction — say what it specializes, or what specializes it`);
+    }
+    if (!DEFINITION_HEADING.test(t.body)) {
+      warn(`${t.file}: object body has no "## Definicija" / "## Definition" heading`);
+    }
+  }
+
+  function checkObject({ file, fm }) {
+    latex(file, "symbol", fm.symbol);
+    sentence(file, "hom", fm.hom);
+    // Cross-vault identity points into the library forest, which is another
+    // repository — only the shape is checked here; grow resolves it.
+    if (fm.same_as !== undefined && !(typeof fm.same_as === "string" && OBJECT_ID.test(fm.same_as))) {
+      err(`${file}: same_as must be a library object id like "obj-group-action"`);
+    }
+    if (fm.nlab !== undefined) {
+      if (!isPlainObject(fm.nlab)) {
+        err(`${file}: nlab must be an object {title, revision}`);
+      } else {
+        checkKeys(fm.nlab, new Set(["title", "revision"]), `${file}: nlab`, err);
+        if (typeof fm.nlab.title !== "string" || fm.nlab.title.trim() === "") {
+          err(`${file}: nlab.title must be the nLab page title`);
+        }
+        if (!Number.isInteger(fm.nlab.revision)) {
+          err(`${file}: nlab.revision must be an integer`);
+        }
+      }
+    }
+  }
+
+  function checkMorphism({ file, stem, fm }) {
+    if (!MORPHISM_KINDS.has(fm.kind)) {
+      err(`${file}: kind must be one of ${[...MORPHISM_KINDS].join(", ")}, got ${JSON.stringify(fm.kind)}`);
+    }
+    const instance = fm.kind === "instance";
+
+    if (typeof fm.from !== "string") {
+      err(`${file}: from must be an object id (or "${POINT}" on an instance arrow)`);
+    } else if (fm.from === POINT) {
+      if (!instance) {
+        err(`${file}: from is "${POINT}" but kind is ${JSON.stringify(fm.kind)} — ${POINT} is reserved for instance arrows`);
+      }
+    } else if (instance) {
+      err(`${file}: from must be "${POINT}" on an instance arrow (got "${fm.from}") — an example has no source structure`);
+    } else if (!treeOfTaxon(fm.from, "object")) {
+      err(`${file}: from "${fm.from}" must name an object (obj-) tree in this vault`);
+    }
+    if (!treeOfTaxon(fm.to, "object")) {
+      err(`${file}: to ${JSON.stringify(fm.to)} must name an object (obj-) tree in this vault`);
+    }
+
+    latex(file, "statement", fm.statement);
+    if (fm.label !== undefined) latex(file, "label", fm.label);
+    if (fm.needs !== undefined && !(isStringArray(fm.needs) && fm.needs.every((s) => s.trim() !== ""))) {
+      err(`${file}: needs must be an array of sentences naming extra data (may be empty)`);
+    }
+
+    if (instance) {
+      for (const key of ["acts_on", "on_homomorphisms", "functorial"]) {
+        if (fm[key] !== undefined) {
+          err(`${file}: ${key} is not allowed on an instance arrow — there is no source structure to act on`);
+        }
+      }
+      if (fm.values !== undefined) {
+        if (!isPlainObject(fm.values)) {
+          err(`${file}: values must be a mapping from mor- ids to one sentence each`);
+        } else {
+          for (const [id, v] of Object.entries(fm.values)) {
+            const m = treeOfTaxon(id, "morphism");
+            if (!m) {
+              err(`${file}: values key "${id}" must name a morphism tree`);
+            } else if (m.fm.from !== fm.to) {
+              err(`${file}: values key "${id}" is an arrow out of "${m.fm.from}", not out of this instance's target "${fm.to}" (see ${m.file}: from)`);
+            }
+            if (typeof v !== "string" || v.trim() === "") {
+              err(`${file}: values["${id}"] must be one sentence`);
+            }
+          }
+        }
+      }
+    } else {
+      if (fm.values !== undefined) {
+        err(`${file}: values is only allowed on an instance arrow (kind: instance)`);
+      }
+      if (fm.acts_on === undefined) {
+        err(`${file}: acts_on is required — "all" or a list of data arrows out of ${JSON.stringify(fm.from)}`);
+      } else if (fm.acts_on !== "all") {
+        if (!isStringArray(fm.acts_on)) {
+          err(`${file}: acts_on must be "all" or an array of mor- ids`);
+        } else {
+          for (const id of fm.acts_on) {
+            const m = treeOfTaxon(id, "morphism");
+            if (!m) {
+              err(`${file}: acts_on entry "${id}" must name a morphism tree`);
+            } else if (m.fm.kind !== "data") {
+              err(`${file}: acts_on entry "${id}" has kind ${JSON.stringify(m.fm.kind)} — acts_on lists data arrows only`);
+            } else if (m.fm.from !== fm.from) {
+              err(`${file}: acts_on entry "${id}" is an arrow out of "${m.fm.from}", not out of this arrow's source ${JSON.stringify(fm.from)} (see ${m.file}: from)`);
+            }
+          }
+        }
+      }
+      if (fm.needs === undefined) {
+        err(`${file}: needs is required — the extra data the arrow consumes beyond its source (may be [])`);
+      }
+      sentence(file, "on_homomorphisms", fm.on_homomorphisms);
+      if (typeof fm.functorial !== "boolean") {
+        err(`${file}: functorial must be true or false`);
+      } else if (fm.kind === "generalizes" && fm.functorial !== true) {
+        err(`${file}: a generalizes arrow must be functorial: true — a map of the narrower kind is a map of the wider one`);
+      }
+    }
+
+    if (fm.inverse !== undefined) {
+      const m = treeOfTaxon(fm.inverse, "morphism");
+      if (!m) {
+        err(`${file}: inverse ${JSON.stringify(fm.inverse)} must name a morphism tree`);
+      } else if (m.fm.inverse !== stem) {
+        err(`${file}: inverse "${fm.inverse}" does not point back — ${m.file} must carry inverse: ${stem}`);
+      }
+    }
+    if (fm.generalized_by !== undefined) {
+      if (!isStringArray(fm.generalized_by)) {
+        err(`${file}: generalized_by must be an array of mor- ids`);
+      } else {
+        for (const id of fm.generalized_by) {
+          if (!treeOfTaxon(id, "morphism")) {
+            err(`${file}: generalized_by entry "${id}" must name a morphism tree`);
+          }
+        }
+      }
+    }
+  }
 }
 
 // ------------------------------------------------------------------------ DAG

@@ -2,6 +2,8 @@
 id: thm-lagrange
 taxon: theorem
 title: "Lagrangeov teorem"
+about: [obj-subgroup]
+fields: [algebra]
 teaches: [lagrange]
 requires: []
 depends: [def-coset, def-index]

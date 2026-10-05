@@ -32,6 +32,9 @@ if (!fs.existsSync(path.join(vault, "forest.json")) || !fs.existsSync(forestHtml
   console.error(`error: ${vault} is not a built vault (needs forest.json and views/forest.html — run build-views.mjs first)`);
   process.exit(1);
 }
+// Diagram captions in served answers and notes follow the vault's language,
+// as they do in the built page.
+const LANG = JSON.parse(fs.readFileSync(path.join(vault, "forest.json"), "utf8")).language === "en" ? "en" : "hr";
 const askDir = path.join(vault, ".ask");
 const sessionsDir = path.join(vault, "sessions");
 fs.mkdirSync(askDir, { recursive: true });
@@ -218,7 +221,7 @@ async function handle(req, res) {
     return json(res, 200, {
       exists: true,
       state: readJson(stateFile),
-      notes_html: notes == null ? "" : renderBody(notes, (id) => known.has(id)),
+      notes_html: notes == null ? "" : renderBody(notes, (id) => known.has(id), { lang: LANG }),
       rev,
       updated,
     });
@@ -249,7 +252,7 @@ async function handle(req, res) {
           sentAnswer = true;
           const md = readText(path.join(dir, "answer.md")) ?? "";
           const known = treeIds();
-          emit("answer", { html: renderBody(md, (id) => known.has(id)), markdown: md, trees_added: st.trees_added ?? [] });
+          emit("answer", { html: renderBody(md, (id) => known.has(id), { lang: LANG }), markdown: md, trees_added: st.trees_added ?? [] });
           emit("done", {});
           finish();
         } else if (!sentAnswer && st?.state === "error") {

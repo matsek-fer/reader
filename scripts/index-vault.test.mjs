@@ -40,7 +40,10 @@ test("index-vault SKIP_EMBED writes a well-formed forest-index-0.1", () => {
   assert.equal(index.dims, 384);
   assert.equal(index.quantization, "int8-per-item-scale");
   assert.equal(index.unembedded, true);
-  assert.equal(index.items.length, 12);
+  // One item per tree, whatever the vault holds today.
+  const treeCount = fs.readdirSync(path.join(vault, "trees")).filter((f) => f.endsWith(".md")).length;
+  assert.ok(treeCount >= 12, String(treeCount));
+  assert.equal(index.items.length, treeCount);
   // Deterministic order: sorted tree filenames.
   const ids = index.items.map((it) => it.id);
   assert.deepEqual(ids, [...ids].sort());
@@ -52,6 +55,14 @@ test("index-vault SKIP_EMBED writes a well-formed forest-index-0.1", () => {
   // Unembedded still carries the vector offset, but no scale.
   assert.equal(typeof thm.offset, "number");
   assert.ok(!("scale" in thm));
+  // forest-0.2: objects and morphisms are indexed like any tree; a morphism
+  // is not listed in index.md and takes its group from the object it leaves.
+  const obj = index.items.find((it) => it.id === "obj-group-action");
+  assert.equal(obj.taxon, "object");
+  assert.equal(obj.group, "Struktura");
+  const mor = index.items.find((it) => it.id === "mor-orbits");
+  assert.equal(mor.taxon, "morphism");
+  assert.equal(mor.group, "Struktura");
   assert.equal(fs.readFileSync(path.join(vault, "index", "vectors.i8.bin")).length, 0);
 });
 

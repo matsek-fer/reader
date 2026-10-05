@@ -5,6 +5,25 @@
   "quantization": "int8-per-item-scale",
   "items": [
     {
+      "id": "con-ekvivarijantna-preslikavanja",
+      "taxon": "connection",
+      "title": "Ekvivarijantna preslikavanja: morfizmi među djelovanjima",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "group-homomorphisms"
+      ],
+      "depends": [
+        "obj-group-action",
+        "def-group-action"
+      ],
+      "group": "4 · Primjer i veza",
+      "standalone": true,
+      "offset": 0,
+      "scale": 0.00099004864
+    },
+    {
       "id": "con-slobodna-djelovanja",
       "taxon": "connection",
       "title": "Lagrange kao specijalan slučaj slobodnih djelovanja",
@@ -19,7 +38,7 @@
       ],
       "group": "4 · Primjer i veza",
       "standalone": true,
-      "offset": 0,
+      "offset": 384,
       "scale": 0.0011547187
     },
     {
@@ -36,7 +55,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 384,
+      "offset": 768,
       "scale": 0.00097692775
     },
     {
@@ -52,7 +71,7 @@
       ],
       "group": "1 · Temelji",
       "standalone": true,
-      "offset": 768,
+      "offset": 1152,
       "scale": 0.00097817007
     },
     {
@@ -69,7 +88,7 @@
       "depends": [],
       "group": "1 · Temelji",
       "standalone": true,
-      "offset": 1152,
+      "offset": 1536,
       "scale": 0.0010524527
     },
     {
@@ -85,7 +104,7 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 1536,
+      "offset": 1920,
       "scale": 0.00089876377
     },
     {
@@ -101,7 +120,7 @@
       ],
       "group": "1 · Temelji",
       "standalone": true,
-      "offset": 1920,
+      "offset": 2304,
       "scale": 0.0010076583
     },
     {
@@ -117,7 +136,7 @@
       ],
       "group": "1 · Temelji",
       "standalone": true,
-      "offset": 2304,
+      "offset": 2688,
       "scale": 0.00099860179
     },
     {
@@ -135,7 +154,7 @@
       ],
       "group": "4 · Primjer i veza",
       "standalone": true,
-      "offset": 2688,
+      "offset": 3072,
       "scale": 0.00090415013
     },
     {
@@ -151,8 +170,383 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 3072,
+      "offset": 3456,
       "scale": 0.00096252197
+    },
+    {
+      "id": "mor-action-group",
+      "taxon": "morphism",
+      "title": "Grupa koja djeluje",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [],
+      "depends": [
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 3840,
+      "scale": 0.00088079233
+    },
+    {
+      "id": "mor-action-set",
+      "taxon": "morphism",
+      "title": "Skup na kojem se djeluje",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [],
+      "depends": [
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 4224,
+      "scale": 0.00092531207
+    },
+    {
+      "id": "mor-cayley",
+      "taxon": "morphism",
+      "title": "Grupa djeluje na sebi: Cayleyjevo djelovanje",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [],
+      "depends": [
+        "obj-group",
+        "obj-group-action",
+        "def-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 4608,
+      "scale": 0.00087721001
+    },
+    {
+      "id": "mor-coset-action",
+      "taxon": "morphism",
+      "title": "Djelovanje na kosetima",
+      "teaches": [
+        "action-on-cosets"
+      ],
+      "requires": [],
+      "depends": [
+        "obj-subgroup",
+        "def-coset",
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 4992,
+      "scale": 0.00091608426
+    },
+    {
+      "id": "mor-curry",
+      "taxon": "morphism",
+      "title": "Djelovanje kao homomorfizam u Sym(X)",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "permutation-groups",
+        "group-homomorphisms"
+      ],
+      "depends": [
+        "obj-group-action",
+        "obj-perm-rep"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 5376,
+      "scale": 0.00097049614
+    },
+    {
+      "id": "mor-fixed-points",
+      "taxon": "morphism",
+      "title": "Fiksne točke",
+      "teaches": [
+        "orbits-stabilizers"
+      ],
+      "requires": [],
+      "depends": [
+        "obj-group-action",
+        "exp-orbite-i-stabilizatori"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 5760,
+      "scale": 0.00099278681
+    },
+    {
+      "id": "mor-g-sets",
+      "taxon": "morphism",
+      "title": "Djelovanje kao objekt kategorije G-skupova",
+      "teaches": [],
+      "requires": [
+        "categories-functors",
+        "limits-colimits"
+      ],
+      "depends": [
+        "obj-group-action",
+        "obj-g-sets"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 6144,
+      "scale": 0.00096561349
+    },
+    {
+      "id": "mor-monoid-action",
+      "taxon": "morphism",
+      "title": "Djelovanje grupe kao djelovanje monoida",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-group-action",
+        "obj-monoid-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 6528,
+      "scale": 0.00097126743
+    },
+    {
+      "id": "mor-ogrlice-z6",
+      "taxon": "morphism",
+      "title": "Rotacije ogrlice od šest perli",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "cyclic-groups"
+      ],
+      "depends": [
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 6912,
+      "scale": 0.00093749523
+    },
+    {
+      "id": "mor-orbit-count",
+      "taxon": "morphism",
+      "title": "Broj orbita",
+      "teaches": [
+        "orbits-stabilizers"
+      ],
+      "requires": [],
+      "depends": [
+        "mor-orbits"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 7296,
+      "scale": 0.00096841925
+    },
+    {
+      "id": "mor-orbits",
+      "taxon": "morphism",
+      "title": "Skup orbita",
+      "teaches": [
+        "orbits-stabilizers"
+      ],
+      "requires": [],
+      "depends": [
+        "obj-group-action",
+        "exp-orbite-i-stabilizatori"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 7680,
+      "scale": 0.00099049462
+    },
+    {
+      "id": "mor-stabilizer",
+      "taxon": "morphism",
+      "title": "Stabilizator točke",
+      "teaches": [
+        "orbits-stabilizers"
+      ],
+      "requires": [
+        "subgroups"
+      ],
+      "depends": [
+        "obj-group-action",
+        "def-subgroup"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 8064,
+      "scale": 0.0010166418
+    },
+    {
+      "id": "mor-uncurry",
+      "taxon": "morphism",
+      "title": "Homomorfizam u Sym(X) kao djelovanje",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "permutation-groups",
+        "group-homomorphisms"
+      ],
+      "depends": [
+        "obj-perm-rep",
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 8448,
+      "scale": 0.0010323257
+    },
+    {
+      "id": "obj-g-sets",
+      "taxon": "object",
+      "title": "Kategorija G-skupova",
+      "teaches": [],
+      "requires": [
+        "categories-functors"
+      ],
+      "depends": [
+        "obj-group-action",
+        "con-ekvivarijantna-preslikavanja"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 8832,
+      "scale": 0.0010973325
+    },
+    {
+      "id": "obj-group",
+      "taxon": "object",
+      "title": "Grupa",
+      "teaches": [
+        "groups"
+      ],
+      "requires": [],
+      "depends": [
+        "def-group"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 9216,
+      "scale": 0.00095759649
+    },
+    {
+      "id": "obj-group-action",
+      "taxon": "object",
+      "title": "Djelovanje grupe na skupu",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "functions"
+      ],
+      "depends": [
+        "def-group-action",
+        "obj-group",
+        "obj-set"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 9600,
+      "scale": 0.00094148452
+    },
+    {
+      "id": "obj-monoid-action",
+      "taxon": "object",
+      "title": "Djelovanje monoida na skupu",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "def-group",
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 9984,
+      "scale": 0.0009596911
+    },
+    {
+      "id": "obj-nat",
+      "taxon": "object",
+      "title": "Prirodni broj",
+      "teaches": [],
+      "requires": [],
+      "depends": [],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 10368,
+      "scale": 0.0010842972
+    },
+    {
+      "id": "obj-perm-rep",
+      "taxon": "object",
+      "title": "Permutacijska reprezentacija",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "permutation-groups",
+        "group-homomorphisms"
+      ],
+      "depends": [
+        "obj-group",
+        "obj-set"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 10752,
+      "scale": 0.00097873543
+    },
+    {
+      "id": "obj-set",
+      "taxon": "object",
+      "title": "Skup",
+      "teaches": [
+        "sets"
+      ],
+      "requires": [],
+      "depends": [],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 11136,
+      "scale": 0.0008742161
+    },
+    {
+      "id": "obj-subgroup",
+      "taxon": "object",
+      "title": "Podgrupa",
+      "teaches": [
+        "subgroups"
+      ],
+      "requires": [],
+      "depends": [
+        "def-subgroup",
+        "obj-group"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 11520,
+      "scale": 0.00097474168
+    },
+    {
+      "id": "prf-burnside",
+      "taxon": "proof",
+      "title": "Dokaz Burnsideove leme",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "thm-burnside",
+        "thm-orbit-stabilizer",
+        "mor-stabilizer"
+      ],
+      "group": "3 · Djelovanja: drugi motor",
+      "standalone": true,
+      "offset": 11904,
+      "scale": 0.00090684818
     },
     {
       "id": "prf-lagrange-djelovanje",
@@ -167,7 +561,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 3456,
+      "offset": 12288,
       "scale": 0.0010252977
     },
     {
@@ -182,8 +576,42 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 3840,
+      "offset": 12672,
       "scale": 0.0010188112
+    },
+    {
+      "id": "prf-orbit-stabilizer",
+      "taxon": "proof",
+      "title": "Dokaz teorema o orbiti i stabilizatoru",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "thm-orbit-stabilizer",
+        "thm-lagrange",
+        "def-coset"
+      ],
+      "group": "3 · Djelovanja: drugi motor",
+      "standalone": true,
+      "offset": 13056,
+      "scale": 0.00088023911
+    },
+    {
+      "id": "thm-burnside",
+      "taxon": "theorem",
+      "title": "Burnsideova lema",
+      "teaches": [
+        "orbits-stabilizers"
+      ],
+      "requires": [],
+      "depends": [
+        "mor-orbit-count",
+        "mor-fixed-points",
+        "thm-orbit-stabilizer"
+      ],
+      "group": "3 · Djelovanja: drugi motor",
+      "standalone": true,
+      "offset": 13440,
+      "scale": 0.00094452788
     },
     {
       "id": "thm-lagrange",
@@ -199,8 +627,26 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 4224,
+      "offset": 13824,
       "scale": 0.001023773
+    },
+    {
+      "id": "thm-orbit-stabilizer",
+      "taxon": "theorem",
+      "title": "Teorem o orbiti i stabilizatoru",
+      "teaches": [
+        "orbit-stabilizer-theorem"
+      ],
+      "requires": [],
+      "depends": [
+        "exp-orbite-i-stabilizatori",
+        "mor-stabilizer",
+        "def-coset"
+      ],
+      "group": "3 · Djelovanja: drugi motor",
+      "standalone": true,
+      "offset": 14208,
+      "scale": 0.0010125154
     }
   ]
 }

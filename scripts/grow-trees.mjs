@@ -14,7 +14,7 @@
 // affirmed provenance on the exact bytes.
 import fs from "node:fs";
 import path from "node:path";
-import { load } from "js-yaml";
+import { dump, load } from "js-yaml";
 
 const args = process.argv.slice(2);
 const flag = (name, fallback = null) =>
@@ -115,8 +115,23 @@ const resolve = (ref) => idMap.get(ref) ?? remap.get(ref) ?? (forest.has(ref) ? 
 
 // ------------------------------------------------------------- emission
 fs.mkdirSync(path.join(outDir, "trees"), { recursive: true });
-const yq = (s) => JSON.stringify(s);
 const notes = [];
+
+// js-yaml writes the frontmatter: a hand-joined `[a, b]` once mangled a
+// `needs` sentence holding a comma. One dump per key keeps the customary key
+// order, arrays in the flow style hand-written trees use, and mappings
+// (source, nlab, values) in block style.
+const FM_ORDER = ["id", "taxon", "title", "teaches", "requires", "depends", "proves", "language", "origin", "adapted_from", "standalone"];
+function frontmatter(fm) {
+  const keys = [
+    ...FM_ORDER.filter((k) => fm[k] !== undefined),
+    ...Object.keys(fm).filter((k) => !FM_ORDER.includes(k) && fm[k] !== undefined),
+  ];
+  const lines = keys.map((k) =>
+    dump({ [k]: fm[k] }, { flowLevel: Array.isArray(fm[k]) ? 1 : -1, lineWidth: -1, quotingType: '"' })
+  );
+  return `---\n${lines.join("")}---`;
+}
 
 for (const id of picked) {
   const t = vault.get(id);
@@ -173,6 +188,40 @@ for (const id of picked) {
     }
   }
 
+  // Structure edges (forest-0.2) follow the same resolution as depends. The
+  // endpoints are required, so an unresolvable from/to is kept and noted —
+  // the forest validator refuses the tree on arrival, which beats a guess.
+  for (const k of ["from", "to"]) {
+    if (typeof fm[k] !== "string" || fm[k] === "pt") continue;
+    const r = resolve(fm[k]);
+    if (r) fm[k] = r;
+    else notes.push(`${k} ${newId} → ${fm[k]} does not resolve (not grown, not remapped, not in forest) — fix it before merging`);
+  }
+  if (typeof fm.inverse === "string") {
+    const r = resolve(fm.inverse);
+    if (r) fm.inverse = r;
+    else { notes.push(`dropped inverse ${newId} → ${fm.inverse} (unresolvable)`); delete fm.inverse; }
+  }
+  for (const k of ["about", "generalized_by", "acts_on"]) {
+    if (!Array.isArray(fm[k])) continue;
+    const kept = [];
+    for (const d of fm[k]) {
+      const r = resolve(d);
+      if (r) kept.push(r);
+      else notes.push(`dropped ${k} entry ${newId} → ${d} (not grown, not remapped, not in forest)`);
+    }
+    fm[k] = [...new Set(kept)];
+  }
+  if (fm.values && typeof fm.values === "object") {
+    const kept = {};
+    for (const [d, v] of Object.entries(fm.values)) {
+      const r = resolve(d);
+      if (r) kept[r] = v;
+      else notes.push(`dropped values entry ${newId} → ${d} (not grown, not remapped, not in forest)`);
+    }
+    fm.values = kept;
+  }
+
   // Body wikilinks follow the same resolution; an unresolvable one becomes
   // plain text rather than a dead link in the communal graph.
   const body = t.body.replace(/\[\[([^\[\]|#]+)(\|[^\]]*)?\]\]/g, (m, target, label) => {
@@ -182,15 +231,7 @@ for (const id of picked) {
     return (label ? label.slice(1) : target.trim());
   });
 
-  const order = ["id", "taxon", "title", "teaches", "requires", "depends", "proves", "language", "origin", "adapted_from", "standalone"];
-  const lines = ["---"];
-  for (const k of [...order, ...Object.keys(fm).filter((k) => !order.includes(k))]) {
-    const v = fm[k];
-    if (v === undefined) continue;
-    lines.push(Array.isArray(v) ? `${k}: [${v.join(", ")}]` : `${k}: ${typeof v === "string" ? yq(v) : typeof v === "object" ? JSON.stringify(v) : v}`);
-  }
-  lines.push("---", "", body, "");
-  fs.writeFileSync(path.join(outDir, "trees", `${newId}.md`), lines.join("\n"));
+  fs.writeFileSync(path.join(outDir, "trees", `${newId}.md`), `${frontmatter(fm)}\n\n${body}\n`);
 }
 
 for (const n of notes) console.error(`note: ${n}`);

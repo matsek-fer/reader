@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // index-vault.mjs — writes <vault>/index/ (index.json + vectors.i8.bin) for
-// a forest-0.1 vault, so search-vault.mjs can retrieve trees the way the
-// library's search retrieves bundles.
+// a forest-0.1 or forest-0.2 vault, so search-vault.mjs can retrieve trees
+// the way the library's search retrieves bundles.
 //
 // Usage: node scripts/index-vault.mjs <vault-dir>
 //        SKIP_EMBED=1 node scripts/index-vault.mjs <vault-dir>
@@ -34,9 +34,10 @@ if (!vaultDir || !fs.existsSync(path.join(vaultDir, "forest.json"))) {
   process.exit(2);
 }
 
+const SCHEMA_VERSIONS = ["forest-0.1", "forest-0.2"];
 const forest = JSON.parse(fs.readFileSync(path.join(vaultDir, "forest.json"), "utf8"));
-if (forest.schema_version !== "forest-0.1") {
-  process.stderr.write(`error: schema_version ${forest.schema_version}, expected forest-0.1\n`);
+if (!SCHEMA_VERSIONS.includes(forest.schema_version)) {
+  process.stderr.write(`error: schema_version ${forest.schema_version}, expected one of ${SCHEMA_VERSIONS.join(", ")}\n`);
   process.exit(1);
 }
 
@@ -62,9 +63,10 @@ for (const stem of stems) {
 }
 
 // group = the index.md section (## heading) that lists the tree; a proof
-// unlisted there follows the statement it proves, the same attachment rule
-// build-views.mjs uses, so search results and the forest view agree on
-// where a tree lives. Anything still unplaced gets "Ostalo".
+// unlisted there follows the statement it proves, and a morphism (never
+// listed) follows its `from` object — an instance its `to` — the same
+// attachment rules build-views.mjs uses, so search results and the forest
+// view agree on where a tree lives. Anything still unplaced gets "Ostalo".
 function groupsOf(trees) {
   const indexText = fs.readFileSync(path.join(vaultDir, "index.md"), "utf8");
   const groupOf = new Map();
@@ -80,9 +82,14 @@ function groupsOf(trees) {
   }
   const byId = new Map(trees.map((t) => [t.fm.id, t]));
   for (const t of trees) {
-    if (groupOf.has(t.fm.id) || t.fm.taxon !== "proof") continue;
-    const home = (t.fm.depends ?? []).find((d) => groupOf.has(d) && byId.has(d));
-    if (home) groupOf.set(t.fm.id, groupOf.get(home));
+    if (groupOf.has(t.fm.id)) continue;
+    let home;
+    if (t.fm.taxon === "proof") {
+      home = (t.fm.depends ?? []).find((d) => groupOf.has(d) && byId.has(d));
+    } else if (t.fm.taxon === "morphism") {
+      home = t.fm.from === "pt" ? t.fm.to : t.fm.from;
+    }
+    if (home && groupOf.has(home) && byId.has(home)) groupOf.set(t.fm.id, groupOf.get(home));
   }
   return (id) => groupOf.get(id) ?? "Ostalo";
 }
@@ -105,9 +112,13 @@ function bodyToText(md) {
     .trim();
 }
 
+// A structure tree (forest-0.2) carries its mathematics in frontmatter — an
+// object's symbol, an arrow's statement — and its body may never spell it
+// out, so that TeX joins the title the way inline math joins a body.
 function embedText(t) {
+  const math = [t.fm.symbol, t.fm.statement].filter((s) => typeof s === "string" && s.trim() !== "");
   const ann = typeof t.fm.x_annotation === "string" ? ` — ${t.fm.x_annotation}` : "";
-  return `passage: ${t.fm.title} — ${bodyToText(t.body)}${ann}`;
+  return `passage: ${[t.fm.title, ...math].join(" — ")} — ${bodyToText(t.body)}${ann}`;
 }
 
 /* ---------------- index output ---------------- */
