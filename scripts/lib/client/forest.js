@@ -456,11 +456,18 @@
     return { x: p.x, y: p.y, w: G.NODE_W, h: G.NODE_H + n * (S.geom.INST_H + S.geom.INST_GAP) };
   }
   function unit(x, y) { var l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
-  function bez(e, t) {
+  // An edge is a chain of cubic segments, each [p, c1, c2, q]: one for a
+  // direct edge, three when it detours under a box that stands in its way.
+  function cubicAt(g, t) {
     var s = 1 - t, a = s * s * s, b = 3 * s * s * t, c = 3 * s * t * t, d = t * t * t;
-    return [a * e.p0[0] + b * e.c1[0] + c * e.c2[0] + d * e.p2[0],
-            a * e.p0[1] + b * e.c1[1] + c * e.c2[1] + d * e.p2[1]];
+    return [a * g[0][0] + b * g[1][0] + c * g[2][0] + d * g[3][0],
+            a * g[0][1] + b * g[1][1] + c * g[2][1] + d * g[3][1]];
   }
+  function segAt(e, t) {
+    var n = e.segs.length, i = Math.min(n - 1, Math.floor(t * n));
+    return [e.segs[i], t * n - i];
+  }
+  function bez(e, t) { var s = segAt(e, t); return cubicAt(s[0], s[1]); }
   function objTitle(id) { return objById[id] ? objById[id].title : id; }
 
   // One edge per arrow, except that an inverse pair collapses into one
@@ -501,12 +508,50 @@
         if (p.end) p.e.p2 = pt; else p.e.p0 = pt;
       });
     });
+    var allBoxes = S.objects.map(function (o) { var b = boxOf(o.id); b.id = o.id; return b; });
+    // Level tangents at both ends; sp and sq say which way each end faces.
+    function cubic(p, q, sp, sq) {
+      var reach = Math.max(40, Math.abs(q[0] - p[0]) * 0.5);
+      return [p, [p[0] + sp * reach, p[1]], [q[0] + sq * reach, q[1]], q];
+    }
+    function blockers(segs, e) {
+      return allBoxes.filter(function (b) {
+        if (b.id === e.from || b.id === e.to) return false;
+        for (var s = 0; s < segs.length; s++) for (var k = 0; k <= 16; k++) {
+          var q = cubicAt(segs[s], k / 16);
+          if (q[0] > b.x - 6 && q[0] < b.x + b.w + 6 && q[1] > b.y - 6 && q[1] < b.y + b.h + 6) return true;
+        }
+        return false;
+      });
+    }
+    var lanes = {};
     list.forEach(function (e) {
-      var reach = e.sa === e.sb
-        ? 70 + Math.abs(e.p2[1] - e.p0[1]) * 0.25
-        : Math.max(40, Math.abs(e.p2[0] - e.p0[0]) * 0.5);
-      e.c1 = [e.p0[0] + (e.sa === 'r' ? reach : -reach), e.p0[1]];
-      e.c2 = [e.p2[0] + (e.sb === 'r' ? reach : -reach), e.p2[1]];
+      var da = e.sa === 'r' ? 1 : -1, db = e.sb === 'r' ? 1 : -1;
+      if (e.sa === e.sb) {
+        var out = 70 + Math.abs(e.p2[1] - e.p0[1]) * 0.25;
+        e.segs = [[e.p0, [e.p0[0] + da * out, e.p0[1]], [e.p2[0] + db * out, e.p2[1]], e.p2]];
+        return;
+      }
+      e.segs = [cubic(e.p0, e.p2, da, db)];
+      var blocked = blockers(e.segs, e);
+      if (!blocked.length) return;
+      // An edge that skips a column would cut through the box standing in
+      // it. It passes under the lot instead — over, when under is worse —
+      // on a level lane of its own, so two detours never share a line.
+      var x1 = Math.min.apply(null, blocked.map(function (b) { return b.x; })) - 14;
+      var x2 = Math.max.apply(null, blocked.map(function (b) { return b.x + b.w; })) + 14;
+      var under = Math.max.apply(null, blocked.map(function (b) { return b.y + b.h; })) + 14;
+      var over = Math.min.apply(null, blocked.map(function (b) { return b.y; })) - 14;
+      var key = blocked.map(function (b) { return b.id; }).sort().join(',');
+      var cand = [['u', under, 1], ['o', over, -1]].map(function (c) {
+        var y = c[1] + c[2] * 9 * (lanes[key + c[0]] || 0);
+        var a = [da > 0 ? x1 : x2, y], z = [da > 0 ? x2 : x1, y];
+        var segs = [cubic(e.p0, a, da, -da), [a, a, z, z], cubic(z, e.p2, da, db)];
+        return { k: key + c[0], segs: segs, bad: blockers(segs, e).length };
+      });
+      var pick = cand[1].bad < cand[0].bad ? cand[1] : cand[0];
+      lanes[pick.k] = (lanes[pick.k] || 0) + 1;
+      e.segs = pick.segs;
     });
     return list;
   }
@@ -516,8 +561,9 @@
     sedges = buildEdges();
     var eh = '', lh = '';
     sedges.forEach(function (e, i) {
-      var d = 'M' + r1(e.p0[0]) + ',' + r1(e.p0[1]) + ' C' + r1(e.c1[0]) + ',' + r1(e.c1[1]) + ' ' +
-        r1(e.c2[0]) + ',' + r1(e.c2[1]) + ' ' + r1(e.p2[0]) + ',' + r1(e.p2[1]);
+      var d = 'M' + r1(e.p0[0]) + ',' + r1(e.p0[1]) + e.segs.map(function (g) {
+        return ' C' + r1(g[1][0]) + ',' + r1(g[1][1]) + ' ' + r1(g[2][0]) + ',' + r1(g[2][1]) + ' ' + r1(g[3][0]) + ',' + r1(g[3][1]);
+      }).join('');
       eh += '<g class="sedge" data-id="' + escText(e.ids[0]) + '" data-kind="' + escText(e.kind) + '">' +
         '<path class="hit" d="' + d + '"/>' +
         '<path class="line" d="' + d + '" style="stroke:' + KIND_COLOR[e.kind] + '"' +
@@ -549,9 +595,11 @@
     return w > 0 && h > 0 ? w * h : 0;
   }
   function tangent(e, t) {
-    var s = 1 - t, a = 3 * s * s, b = 6 * s * t, c = 3 * t * t;
-    return unit(a * (e.c1[0] - e.p0[0]) + b * (e.c2[0] - e.c1[0]) + c * (e.p2[0] - e.c2[0]),
-                a * (e.c1[1] - e.p0[1]) + b * (e.c2[1] - e.c1[1]) + c * (e.p2[1] - e.c2[1]));
+    var sg = segAt(e, t), g = sg[0], u = sg[1], s = 1 - u, a = 3 * s * s, b = 6 * s * u, c = 3 * u * u;
+    var x = a * (g[1][0] - g[0][0]) + b * (g[2][0] - g[1][0]) + c * (g[3][0] - g[2][0]);
+    var y = a * (g[1][1] - g[0][1]) + b * (g[2][1] - g[1][1]) + c * (g[3][1] - g[2][1]);
+    // A level lane is a cubic with doubled ends: no speed at its two ends.
+    return x || y ? unit(x, y) : unit(g[3][0] - g[0][0], g[3][1] - g[0][1]);
   }
   function placeLabels() {
     var boxes = S.objects.map(function (o) { return boxOf(o.id); });
