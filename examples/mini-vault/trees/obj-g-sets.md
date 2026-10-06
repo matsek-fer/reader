@@ -4,6 +4,8 @@ taxon: object
 title: "Kategorija G-skupova"
 symbol: 'G\text{-}\mathbf{Set}'
 hom: 'Funktor između dviju takvih kategorija; npr. svaki homomorfizam $\varphi\colon G\to H$ daje restrikciju $H\text{-}\mathbf{Set}\to G\text{-}\mathbf{Set}$, $g\cdot y=\varphi(g)\cdot y$.'
+region: strukture
+pos: [640, 280]
 teaches: []
 requires: [categories-functors]
 depends: [obj-group-action, con-ekvivarijantna-preslikavanja]
@@ -36,7 +38,7 @@ disjunktna je unija tranzitivnih, a svaki tranzitivni izomorfan je nekom $G/H$
 ([[thm-orbit-stabilizer]]).
 
 ## Primjeri
-$\mathbb{Z}_6\text{-}\mathbf{Set}$ sadrži ogrlice ([[mor-ogrlice-z6]]); za
+$\mathbb{Z}_6\text{-}\mathbf{Set}$ sadrži ogrlice ([[obj-ogrlice-z6]]); za
 trivijalnu grupu $\{e\}\text{-}\mathbf{Set}$ obični je $\mathbf{Set}$.
 
 ## Povezano

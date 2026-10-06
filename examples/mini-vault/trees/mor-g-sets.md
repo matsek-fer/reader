@@ -11,6 +11,7 @@ acts_on: all
 needs: []
 on_homomorphisms: 'Funktor na $G\text{-}\mathbf{Set}$ ($\varphi=\mathrm{id}$): $(\mathrm{id}_G,f)\mapsto f$, strelica kategorije; za opći $\varphi\colon G\to H$ par $(\varphi,f)$ postaje strelica $X\to\varphi^{*}Y$ u $G\text{-}\mathbf{Set}$ tek nakon restrikcije $Y$ uzduž $\varphi$.'
 functorial: true
+region: strukture
 teaches: []
 requires: [categories-functors, limits-colimits]
 depends: [obj-group-action, obj-g-sets]

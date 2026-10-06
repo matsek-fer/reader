@@ -18,7 +18,7 @@ graph TD
     g1["2 · Teorem i dokazi (4)"]
     g2["3 · Djelovanja: drugi motor (6)"]
     g3["4 · Primjer i veza (4)"]
-    g4["Struktura (24)"]
+    g4["Struktura (32)"]
     g0 --> g1
     g0 --> g2
     g0 --> g3
@@ -105,45 +105,53 @@ graph TD
     obj_group["obj-group"]
     obj_subgroup["obj-subgroup"]
     obj_group_action["obj-group-action"]
-    obj_group_action_target["obj-group-action-target"]
     obj_perm_rep["obj-perm-rep"]
     obj_monoid_action["obj-monoid-action"]
     obj_g_sets["obj-g-sets"]
+    obj_acted_set["obj-acted-set"]
+    obj_acting_group["obj-acting-group"]
+    obj_ambient_group["obj-ambient-group"]
+    obj_group_action_source["obj-group-action-source"]
+    obj_group_action_target["obj-group-action-target"]
+    obj_ogrlice_z6["obj-ogrlice-z6"]
+    obj_podgrupa_z6["obj-podgrupa-z6"]
+    obj_set --> obj_acted_set
+    obj_group --> obj_acting_group
+    obj_group --> obj_ambient_group
+    obj_group_action --> obj_group_action_source
+    obj_group_action --> obj_group_action_target
+    obj_group_action --> obj_monoid_action
+    obj_group_action --> obj_ogrlice_z6
+    obj_group --> obj_perm_rep
+    obj_set --> obj_perm_rep
+    obj_subgroup --> obj_podgrupa_z6
+```
+
+```mermaid
+graph TD
+    obj_subgroup_as_group["obj-subgroup-as-group"]
     mor_act_by_element["mor-act-by-element"]
     mor_action_group["mor-action-group"]
     mor_action_set["mor-action-set"]
     mor_cayley["mor-cayley"]
     mor_coset_action["mor-coset-action"]
     mor_curry["mor-curry"]
-    obj_set --> mor_act_by_element
-    obj_group_action --> mor_action_group
-    obj_group_action --> mor_action_set
-    obj_group_action --> mor_cayley
-    obj_group_action --> mor_coset_action
-    obj_subgroup --> mor_coset_action
-    obj_group_action --> mor_curry
-    obj_perm_rep --> mor_curry
-    obj_group --> obj_group_action
-    obj_set --> obj_group_action
-    obj_group_action --> obj_group_action_target
-    obj_group_action --> obj_monoid_action
-    obj_group --> obj_perm_rep
-    obj_set --> obj_perm_rep
-    obj_group --> obj_subgroup
+    mor_equivariant_map["mor-equivariant-map"]
+    mor_fixed_points["mor-fixed-points"]
+    mor_g_sets["mor-g-sets"]
+    mor_inclusion["mor-inclusion"]
+    mor_monoid_action["mor-monoid-action"]
+    mor_orbit_count["mor-orbit-count"]
+    mor_orbits["mor-orbits"]
+    mor_rho["mor-rho"]
+    obj_subgroup_as_group --> mor_inclusion
+    mor_orbits --> mor_orbit_count
 ```
 
 ```mermaid
 graph TD
-    mor_equivariant_map["mor-equivariant-map"]
-    mor_fixed_points["mor-fixed-points"]
-    mor_g_sets["mor-g-sets"]
-    mor_monoid_action["mor-monoid-action"]
-    mor_ogrlice_z6["mor-ogrlice-z6"]
-    mor_orbit_count["mor-orbit-count"]
-    mor_orbits["mor-orbits"]
     mor_stabilizer["mor-stabilizer"]
     mor_uncurry["mor-uncurry"]
-    mor_orbits --> mor_orbit_count
 ```
 
 - [[obj-set]] — Skup
@@ -151,10 +159,17 @@ graph TD
 - [[obj-group]] — Grupa
 - [[obj-subgroup]] — Podgrupa
 - [[obj-group-action]] — Djelovanje grupe na skupu
-- [[obj-group-action-target]] — Drugo djelovanje iste grupe
 - [[obj-perm-rep]] — Permutacijska reprezentacija
 - [[obj-monoid-action]] — Djelovanje monoida na skupu
 - [[obj-g-sets]] — Kategorija G-skupova
+- [[obj-acted-set]] — Skup na kojem se djeluje
+- [[obj-acting-group]] — Grupa koja djeluje
+- [[obj-ambient-group]] — Okolna grupa
+- [[obj-group-action-source]] — Djelovanje na skupu X
+- [[obj-group-action-target]] — Drugo djelovanje iste grupe
+- [[obj-ogrlice-z6]] — Rotacije ogrlice od šest perli
+- [[obj-podgrupa-z6]] — Podgrupa $\{0,3\}$ u $\mathbb{Z}_6$
+- [[obj-subgroup-as-group]] — Podgrupa kao grupa za sebe
 - [[mor-act-by-element]] — Djelovanje jednog elementa
 - [[mor-action-group]] — Grupa koja djeluje
 - [[mor-action-set]] — Skup na kojem se djeluje
@@ -164,9 +179,10 @@ graph TD
 - [[mor-equivariant-map]] — Ekvivarijantno preslikavanje
 - [[mor-fixed-points]] — Fiksne točke
 - [[mor-g-sets]] — Djelovanje kao objekt kategorije G-skupova
+- [[mor-inclusion]] — Inkluzija podgrupe
 - [[mor-monoid-action]] — Djelovanje grupe kao djelovanje monoida
-- [[mor-ogrlice-z6]] — Rotacije ogrlice od šest perli
 - [[mor-orbit-count]] — Broj orbita
 - [[mor-orbits]] — Skup orbita
+- [[mor-rho]] — Pravilo djelovanja
 - [[mor-stabilizer]] — Stabilizator točke
 - [[mor-uncurry]] — Homomorfizam u Sym(X) kao djelovanje

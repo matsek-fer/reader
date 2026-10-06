@@ -11,6 +11,7 @@ acts_on: all
 needs: []
 on_homomorphisms: '$(\varphi,f)\mapsto f$: zaboravlja homomorfizam grupa i pamti preslikavanje skupova.'
 functorial: true
+region: strukture
 teaches: [group-actions]
 requires: []
 depends: [obj-group-action]

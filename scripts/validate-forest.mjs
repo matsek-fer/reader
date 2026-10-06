@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // validate-forest.mjs — checks a Forest vault against docs/forest-format.md
-// (forest-0.1 and forest-0.2). The doc is normative; where it and this file
-// disagree, the doc wins and this file has a bug.
+// (forest-0.1, forest-0.2 and forest-0.3). The doc is normative; where it and
+// this file disagree, the doc wins and this file has a bug.
 //
 // Usage: node scripts/validate-forest.mjs <vault-dir> [--concepts <concepts.yaml>] [--lenient]
 //
@@ -15,9 +15,13 @@ import yaml from "js-yaml";
 
 // A forest-0.1 vault is a forest-0.2 vault with no structure layer: both
 // validate, but the structure taxa and keys are errors under 0.1 so nothing
-// migrates silently.
-const SCHEMA_VERSIONS = ["forest-0.1", "forest-0.2"];
+// migrates silently. forest-0.3 splits the structure layer in two levels —
+// kinds and their instances — and the same rule holds one version up: the
+// two-level keys are errors in 0.2, and 0.2's own are errors in 0.3.
+const SCHEMA_VERSIONS = ["forest-0.1", "forest-0.2", "forest-0.3"];
 const STRUCTURE_VERSION = "forest-0.2";
+const TWO_LEVEL_VERSION = "forest-0.3";
+const STRUCTURE_VERSIONS = new Set([STRUCTURE_VERSION, TWO_LEVEL_VERSION]);
 const NOTICE = "LOKALNO — izvedeno djelo, ne šalje se u knjižnicu";
 // Share-alike sources (GFDL, CC BY-SA): the vault MAY be shared under the
 // source's terms, but still never enters the CC BY library (D-001).
@@ -45,11 +49,14 @@ const PREFIX_TO_TAXON = {
 };
 const TAXA = new Set(Object.values(PREFIX_TO_TAXON));
 
-// The structure layer (forest-0.2): kinds of structure and the arrows between
-// them. `pt` is the one id that is not a tree — the empty source of an
-// instance arrow.
+// The structure layer (forest-0.2 and up): kinds of structure and the arrows
+// between them. `pt` is the one id of 0.2 that is not a tree — the empty
+// source of an instance arrow; 0.3 has no such id.
 const STRUCTURE_TAXA = new Set(["object", "morphism"]);
 const POINT = "pt";
+// Eight kinds in 0.2, seven in 0.3: `instance`, the degenerate construction
+// out of `pt`, becomes an instance object. Insertion order is the order the
+// error message lists them in.
 const MORPHISM_KINDS = new Set([
   "data",
   "transform",
@@ -60,11 +67,17 @@ const MORPHISM_KINDS = new Set([
   "construction",
   "hom",
 ]);
+const MORPHISM_KINDS_TWO_LEVEL = new Set([...MORPHISM_KINDS].filter((k) => k !== "instance"));
 const BASE_KEYS = ["id", "taxon", "title", "teaches", "requires", "depends", "source", "standalone", "origin", "language", "digested_from", "proves", "adapted_from"];
 // Any tree may say which objects and arrows it is about, for which fields,
-// and which principles of the formal system it assumes.
+// and which principles of the formal system it assumes; from 0.3, also which
+// region of the canvas it belongs to.
 const ABOUT_KEYS = ["about", "fields", "assumes"];
+const REGION_KEYS = ["region"];
 const OBJECT_KEYS = ["symbol", "hom", "type", "same_as", "nlab"];
+// `type` and `values` stay listed under 0.3 so a half-migrated vault gets the
+// rule that names the replacement instead of a bare "unknown key".
+const OBJECT_KEYS_TWO_LEVEL = ["symbol", "hom", "instance_of", "data", "values", "pos", "type", "same_as", "nlab"];
 const MORPHISM_KEYS = ["kind", "from", "to", "statement", "label", "acts_on", "needs", "on_homomorphisms", "functorial", "invertible", "inverse", "up_to", "generalized_by", "values"];
 const OBJECT_ID = /^obj-[a-z0-9]+(-[a-z0-9]+)*$/;
 const DEFINITION_HEADING = /^##\s+(Definicija|Definition)\s*$/m;
@@ -132,10 +145,16 @@ function main() {
   const registry = conceptsPath ? loadRegistry(conceptsPath, err) : null;
   const forest = checkForestJson(vaultDir, err);
   const derivative = forest?.derivative === true;
-  const structure = forest?.schema_version === STRUCTURE_VERSION;
+  const structure = STRUCTURE_VERSIONS.has(forest?.schema_version);
+  const twoLevel = forest?.schema_version === TWO_LEVEL_VERSION;
+  const regions = new Set(
+    Array.isArray(forest?.regions)
+      ? forest.regions.filter(isPlainObject).map((r) => r.id)
+      : []
+  );
   const trees = loadTrees(vaultDir, err);
-  checkTrees(trees, { derivative, registry, lenient, structure }, err, warn);
-  if (structure) checkStructure(trees, err, warn);
+  checkTrees(trees, { derivative, registry, lenient, structure, twoLevel }, err, warn);
+  if (structure) checkStructure(trees, { twoLevel, regions }, err, warn);
   checkDag(trees, err);
   checkIndex(vaultDir, trees, err, warn);
   checkViews(vaultDir, trees, err, warn);
@@ -179,6 +198,16 @@ function isStringArray(v) {
   return Array.isArray(v) && v.every((x) => typeof x === "string");
 }
 
+// An authored position on the canvas, in the same units the computed layout
+// uses: [x, y], growing right and down.
+function isPos(v) {
+  return (
+    Array.isArray(v) &&
+    v.length === 2 &&
+    v.every((n) => typeof n === "number" && Number.isFinite(n))
+  );
+}
+
 // ---------------------------------------------------------------- forest.json
 
 function checkForestJson(vaultDir, err) {
@@ -200,6 +229,7 @@ function checkForestJson(vaultDir, err) {
     return null;
   }
 
+  const twoLevel = forest.schema_version === TWO_LEVEL_VERSION;
   checkKeys(
     forest,
     new Set([
@@ -211,10 +241,17 @@ function checkForestJson(vaultDir, err) {
       "tool_version",
       "derivative",
       "notice",
+      // Regions group the canvas, so they arrive with the two-level model and
+      // are an unknown key before it.
+      ...(twoLevel ? ["regions"] : []),
     ]),
     ctx,
     err
   );
+
+  if (twoLevel && forest.regions !== undefined) {
+    checkRegions(forest.regions, ctx, err);
+  }
 
   if (!SCHEMA_VERSIONS.includes(forest.schema_version)) {
     err(
@@ -297,6 +334,35 @@ function checkForestJson(vaultDir, err) {
   return forest;
 }
 
+// The declared regions of the canvas, in the order the page lays them out. A
+// tree may carry a region that is not declared — it lands in an unlabelled
+// area — so the declaration is checked for shape only.
+function checkRegions(regions, ctx, err) {
+  if (!Array.isArray(regions)) {
+    err(`${ctx}: regions must be an array of { id, title }, in the order the page lays them out`);
+    return;
+  }
+  const seen = new Set();
+  regions.forEach((r, i) => {
+    const rctx = `${ctx}: regions[${i}]`;
+    if (!isPlainObject(r)) {
+      err(`${rctx} must be an object { id, title }`);
+      return;
+    }
+    checkKeys(r, new Set(["id", "title"]), rctx, err);
+    if (typeof r.id !== "string" || !KEBAB.test(r.id)) {
+      err(`${rctx}.id must be a kebab-case token (e.g. "valuation")`);
+    } else if (seen.has(r.id)) {
+      err(`${rctx}.id "${r.id}" is declared twice — one region per id`);
+    } else {
+      seen.add(r.id);
+    }
+    if (typeof r.title !== "string" || r.title.trim() === "") {
+      err(`${rctx}.title must be a non-empty label in the vault's language`);
+    }
+  });
+}
+
 // --------------------------------------------------------------------- trees/
 
 function loadTrees(vaultDir, err) {
@@ -337,7 +403,7 @@ function loadTrees(vaultDir, err) {
   return trees;
 }
 
-function checkTrees(trees, { derivative, registry, lenient, structure }, err, warn) {
+function checkTrees(trees, { derivative, registry, lenient, structure, twoLevel }, err, warn) {
   const conceptProblem = lenient ? warn : err;
 
   for (const t of trees.values()) {
@@ -347,7 +413,8 @@ function checkTrees(trees, { derivative, registry, lenient, structure }, err, wa
     const allowed = [...BASE_KEYS];
     if (structure) {
       allowed.push(...ABOUT_KEYS);
-      if (fm.taxon === "object") allowed.push(...OBJECT_KEYS);
+      if (twoLevel) allowed.push(...REGION_KEYS);
+      if (fm.taxon === "object") allowed.push(...(twoLevel ? OBJECT_KEYS_TWO_LEVEL : OBJECT_KEYS));
       if (fm.taxon === "morphism") allowed.push(...MORPHISM_KEYS);
     }
     checkKeys(fm, new Set(allowed), file, err);
@@ -369,7 +436,7 @@ function checkTrees(trees, { derivative, registry, lenient, structure }, err, wa
       err(`${file}: taxon "${fm.taxon}" does not match id prefix "${prefix}-" (expected "${PREFIX_TO_TAXON[prefix]}")`);
     }
     if (!structure && (STRUCTURE_TAXA.has(fm.taxon) || STRUCTURE_TAXA.has(PREFIX_TO_TAXON[prefix]))) {
-      err(`${file}: taxon "${PREFIX_TO_TAXON[prefix] ?? fm.taxon}" (id prefix "${prefix}-") needs forest.json schema_version "${STRUCTURE_VERSION}" — a forest-0.1 vault has no structure layer`);
+      err(`${file}: taxon "${PREFIX_TO_TAXON[prefix] ?? fm.taxon}" (id prefix "${prefix}-") needs forest.json schema_version "${STRUCTURE_VERSION}" or "${TWO_LEVEL_VERSION}" — a forest-0.1 vault has no structure layer`);
     }
 
     if (typeof fm.title !== "string" || fm.title.length === 0) {
@@ -519,25 +586,60 @@ function scrollbackPhrases(body) {
 
 // ------------------------------------------------------------------ structure
 
-// forest-0.2 only. Objects are kinds of structure, morphisms the constructions
-// between them — or, for kind hom, the maps inside one kind. from/to arrows
-// are not prerequisites and may form cycles (curry/uncurry) and loops, so
-// nothing here feeds checkDag — depends still does, and objects and morphisms
-// sit in that DAG like any tree.
-function checkStructure(trees, err, warn) {
+// forest-0.2 and up. Objects are kinds of structure, morphisms the
+// constructions between them — or, for kind hom, the maps inside one kind.
+// from/to arrows are not prerequisites and may form cycles (curry/uncurry) and
+// loops, so nothing here feeds checkDag — depends still does, and objects and
+// morphisms sit in that DAG like any tree.
+//
+// Under 0.3 an object is either a KIND or an INSTANCE of one, and the level
+// decides what may touch it: constructions run between kinds, homs between
+// instances. One key names the level in each version, so the resolvers below
+// take it as a parameter rather than branching twice.
+function checkStructure(trees, { twoLevel, regions }, err, warn) {
+  const LEVEL_KEY = twoLevel ? "instance_of" : "type";
   const treeOfTaxon = (id, taxon) => {
     const t = typeof id === "string" ? trees.get(id) : undefined;
     return t && t.fm.taxon === taxon ? t : null;
   };
-  // The kind a box is an object of: its type, or itself. Undefined while
-  // `type` is broken, so a bad type is reported once and not again by every
-  // hom arrow that touches the box.
+  // The kind a box belongs to: what it is an instance of (0.2: its type), or
+  // itself. Undefined while that key is broken, so a bad pointer is reported
+  // once and not again by every hom arrow that touches the box.
   const rootType = (id) => {
     const t = treeOfTaxon(id, "object");
     if (!t) return undefined;
-    if (t.fm.type === undefined) return t.stem;
-    const type = treeOfTaxon(t.fm.type, "object");
-    return type && type.fm.type === undefined ? type.stem : undefined;
+    if (t.fm[LEVEL_KEY] === undefined) return t.stem;
+    const kind = treeOfTaxon(t.fm[LEVEL_KEY], "object");
+    return kind && kind.fm[LEVEL_KEY] === undefined ? kind.stem : undefined;
+  };
+  // Instance or kind, for an id that need not be an object at all.
+  const isInstance = (id) => {
+    const t = treeOfTaxon(id, "object");
+    return t ? t.fm[LEVEL_KEY] !== undefined : null;
+  };
+  // Which kinds each arrow is a defining component of. A hom between instances
+  // of two different kinds is legal exactly as a component of such a diagram —
+  // the valuation $v\colon K\to\Gamma$ — and this is where that is checked.
+  // Keeping the anchoring kinds, not just the arrow ids, is what stops `data`
+  // from laundering a particular arrow between two named instances into a
+  // "definition": the kind a component arrow defines is a third kind, neither
+  // end's own.
+  const componentAnchors = new Map();
+  if (twoLevel) {
+    for (const t of trees.values()) {
+      if (t.fm.taxon !== "object" || !isStringArray(t.fm.data)) continue;
+      for (const id of t.fm.data) {
+        if (!treeOfTaxon(id, "morphism")) continue;
+        if (!componentAnchors.has(id)) componentAnchors.set(id, new Set());
+        componentAnchors.get(id).add(t.stem);
+      }
+    }
+  }
+  const anchoredByThirdKind = (id, a, b) => {
+    const anchors = componentAnchors.get(id);
+    if (!anchors) return false;
+    for (const k of anchors) if (k !== a && k !== b) return true;
+    return false;
   };
   // LaTeX fields are typeset whole, so a $ inside them is a stray delimiter
   // that KaTeX would print as an error, not math.
@@ -551,6 +653,72 @@ function checkStructure(trees, err, warn) {
   const sentence = (file, key, v) => {
     if (typeof v !== "string" || v.trim() === "") {
       err(`${file}: ${key} must be one sentence (a string; inline $…$ math allowed)`);
+    }
+  };
+
+  // What each arrow out of the kind yields here. The key must be such an
+  // arrow, so a value cannot claim a computation the graph does not have.
+  const checkValuesAgainst = (file, kindId, label, values) => {
+    if (!isPlainObject(values)) {
+      err(`${file}: values must be a mapping from mor- ids to one sentence each`);
+      return;
+    }
+    for (const [id, v] of Object.entries(values)) {
+      const m = treeOfTaxon(id, "morphism");
+      if (!m) {
+        err(`${file}: values key "${id}" must name a morphism tree`);
+      } else if (kindId !== null && m.fm.from !== kindId) {
+        err(`${file}: values key "${id}" is an arrow out of "${m.fm.from}", not out of ${label} "${kindId}" (see ${m.file}: from)`);
+      }
+      if (typeof v !== "string" || v.trim() === "") {
+        err(`${file}: values["${id}"] must be one sentence`);
+      }
+    }
+  };
+
+  // A kind is defined by a diagram over instances of OTHER kinds: the boxes
+  // and the arrows between them that constitute it. Both ends of each arrow
+  // must be in the diagram, or the picture is not the definition it claims;
+  // and an instance of the kind being defined would make the definition
+  // circular, besides turning `data` into a way to legalise any arrow at all.
+  const checkDataDiagram = (file, stem, data) => {
+    if (!isStringArray(data)) {
+      err(`${file}: data must be an array of obj-/mor- ids — the instances and the arrows between them that define this kind`);
+      return;
+    }
+    const inside = new Set(data);
+    for (const id of data) {
+      const t = trees.get(id);
+      if (!t) {
+        err(`${file}: data names unknown tree "${id}"`);
+      } else if (t.fm.taxon === "object") {
+        if (t.fm.instance_of === undefined) {
+          err(`${file}: data entry "${id}" is a kind — a defining diagram is drawn over instances, so name an instance of it (an obj- tree with instance_of: ${id})`);
+        } else if (t.fm.instance_of === stem) {
+          err(`${file}: data entry "${id}" is an instance of this very kind — a defining diagram is drawn over instances of OTHER kinds, so what defines this one cannot already be an example of it`);
+        }
+        // A component may be determined by another component — the vertex set
+        // of the dissection the diagram already names — and `about` is how a
+        // tree says so. What it may not be is a link of a proof's chain: an
+        // `about` reaching an instance OUTSIDE the diagram drops a named object
+        // the proof constructs into a definition, which is the level mixing
+        // this version exists to keep out.
+        if (isStringArray(t.fm.about)) {
+          for (const a of t.fm.about) {
+            const o = treeOfTaxon(a, "object");
+            if (!o || o.fm.instance_of === undefined || inside.has(a)) continue;
+            err(`${file}: data entry "${id}" is about instance "${a}", which this diagram does not contain (see ${t.file}: about) — a component may be determined by another component of the same diagram, but an instance on a proof's chain is part of no definition: list "${a}" here too, or leave this kind primitive`);
+          }
+        }
+      } else if (t.fm.taxon === "morphism") {
+        for (const end of ["from", "to"]) {
+          if (typeof t.fm[end] === "string" && !inside.has(t.fm[end])) {
+            err(`${file}: data entry "${id}" has ${end} "${t.fm[end]}" outside the diagram — an arrow of a defining diagram has both ends inside it`);
+          }
+        }
+      } else {
+        err(`${file}: data entry "${id}" is a ${t.fm.taxon}, not an object or a morphism`);
+      }
     }
   };
 
@@ -577,28 +745,44 @@ function checkStructure(trees, err, warn) {
     if (fm.assumes !== undefined && !(isStringArray(fm.assumes) && fm.assumes.every((a) => KEBAB.test(a)))) {
       err(`${file}: assumes must be an array of kebab-case tokens (e.g. axiom-of-choice, excluded-middle)`);
     }
+    if (twoLevel && fm.region !== undefined) {
+      if (typeof fm.region !== "string" || !KEBAB.test(fm.region)) {
+        err(`${file}: region must be a kebab-case token naming a region of the canvas`);
+      } else if (regions.size > 0 && !regions.has(fm.region)) {
+        warn(`${file}: region "${fm.region}" is not among forest.json regions — the page draws this tree in an unlabelled area`);
+      }
+    }
 
     if (fm.taxon === "object") checkObject(t);
     if (fm.taxon === "morphism") checkMorphism(t);
   }
 
-  // Coverage, as warnings: an object nobody has instantiated or placed among
-  // wider/narrower kinds is a box with no example and no context. A typed
-  // object is a second box of a kind that answers for all three itself.
+  // Coverage, as warnings: a kind nobody has instantiated or placed among
+  // wider/narrower kinds is a box with no example and no context. An instance
+  // (0.2: a typed object) is a box of a kind that answers for all three itself.
   const instanced = new Set();
   const generalized = new Set();
   for (const t of trees.values()) {
+    // 0.3 counts an instance object; 0.2 counts an instance arrow, and a typed
+    // box there is not an example of its type, so the two never mix.
+    if (twoLevel && t.fm.taxon === "object" && typeof t.fm.instance_of === "string") {
+      instanced.add(t.fm.instance_of);
+    }
     if (t.fm.taxon !== "morphism") continue;
-    if (t.fm.kind === "instance") instanced.add(t.fm.to);
+    if (!twoLevel && t.fm.kind === "instance") instanced.add(t.fm.to);
     if (t.fm.kind === "generalizes") {
       generalized.add(t.fm.from);
       generalized.add(t.fm.to);
     }
   }
   for (const t of trees.values()) {
-    if (t.fm.taxon !== "object" || t.fm.type !== undefined) continue;
+    if (t.fm.taxon !== "object" || t.fm[LEVEL_KEY] !== undefined) continue;
     if (!instanced.has(t.stem)) {
-      warn(`${t.file}: object has no instance arrow (a mor- tree with kind: instance, to: ${t.stem}) — give it an example`);
+      warn(
+        twoLevel
+          ? `${t.file}: object has no instance (an obj- tree with instance_of: ${t.stem}) — give the kind an example`
+          : `${t.file}: object has no instance arrow (a mor- tree with kind: instance, to: ${t.stem}) — give it an example`
+      );
     }
     if (!generalized.has(t.stem)) {
       warn(`${t.file}: object has no generalizes arrow in either direction — say what it specializes, or what specializes it`);
@@ -610,20 +794,48 @@ function checkStructure(trees, err, warn) {
 
   function checkObject({ file, stem, fm }) {
     latex(file, "symbol", fm.symbol);
-    if (fm.type === undefined) {
+    if (twoLevel && fm.type !== undefined) {
+      err(`${file}: type was replaced by instance_of in forest-0.3 — an object is a kind (no instance_of) or an instance of one`);
+    }
+    if (fm[LEVEL_KEY] === undefined) {
       sentence(file, "hom", fm.hom);
+      if (twoLevel) {
+        if (fm.values !== undefined) {
+          err(`${file}: values belongs to an instance — an arrow out of a kind applies to every instance of it, so there is nothing for the kind itself to yield`);
+        }
+        if (fm.data !== undefined) checkDataDiagram(file, stem, fm.data);
+      }
     } else {
-      // One level only: a typed box inherits its type's hom, so the type
+      // One level only: an instance inherits its kind's hom, so what it names
       // must be the kind's own box, the one that states it.
-      const type = treeOfTaxon(fm.type, "object");
-      if (!type) {
-        err(`${file}: type ${JSON.stringify(fm.type)} must name an object (obj-) tree in this vault`);
-      } else if (fm.type === stem) {
-        err(`${file}: type names the object itself — the kind's own box carries no type`);
-      } else if (type.fm.type !== undefined) {
-        err(`${file}: type "${fm.type}" is itself typed (see ${type.file}: type) — one level only, name the kind both are objects of`);
+      const kind = treeOfTaxon(fm[LEVEL_KEY], "object");
+      if (!kind) {
+        err(`${file}: ${LEVEL_KEY} ${JSON.stringify(fm[LEVEL_KEY])} must name an object (obj-) tree in this vault`);
+      } else if (fm[LEVEL_KEY] === stem) {
+        err(
+          twoLevel
+            ? `${file}: instance_of names the object itself — an instance names the kind it is an instance of`
+            : `${file}: type names the object itself — the kind's own box carries no type`
+        );
+      } else if (kind.fm[LEVEL_KEY] !== undefined) {
+        err(
+          twoLevel
+            ? `${file}: instance_of "${fm[LEVEL_KEY]}" is itself an instance (see ${kind.file}: instance_of) — one level only, name the kind this is an instance of`
+            : `${file}: type "${fm[LEVEL_KEY]}" is itself typed (see ${kind.file}: type) — one level only, name the kind both are objects of`
+        );
       }
       if (fm.hom !== undefined) sentence(file, "hom", fm.hom);
+      if (twoLevel) {
+        if (fm.data !== undefined) {
+          err(`${file}: data belongs to a kind — an instance carries values, not a defining diagram`);
+        }
+        if (fm.values !== undefined) {
+          checkValuesAgainst(file, rootType(stem) ?? null, "this instance's kind", fm.values);
+        }
+      }
+    }
+    if (twoLevel && fm.pos !== undefined && !isPos(fm.pos)) {
+      err(`${file}: pos must be [x, y] — two finite numbers in canvas units`);
     }
     // Cross-vault identity points into the library forest, which is another
     // repository — only the shape is checked here; grow resolves it.
@@ -646,16 +858,23 @@ function checkStructure(trees, err, warn) {
   }
 
   function checkMorphism({ file, stem, fm }) {
-    if (!MORPHISM_KINDS.has(fm.kind)) {
-      err(`${file}: kind must be one of ${[...MORPHISM_KINDS].join(", ")}, got ${JSON.stringify(fm.kind)}`);
+    const kinds = twoLevel ? MORPHISM_KINDS_TWO_LEVEL : MORPHISM_KINDS;
+    if (!kinds.has(fm.kind)) {
+      if (twoLevel && fm.kind === "instance") {
+        err(`${file}: kind "instance" was removed in forest-0.3 — an example is an instance object now (taxon object, instance_of: ${JSON.stringify(fm.to)}), and its values go on that object`);
+      } else {
+        err(`${file}: kind must be one of ${[...kinds].join(", ")}, got ${JSON.stringify(fm.kind)}`);
+      }
     }
-    const instance = fm.kind === "instance";
+    const instance = !twoLevel && fm.kind === "instance";
     const hom = fm.kind === "hom";
 
     if (typeof fm.from !== "string") {
-      err(`${file}: from must be an object id (or "${POINT}" on an instance arrow)`);
+      err(`${file}: from must be an object id${twoLevel ? "" : ` (or "${POINT}" on an instance arrow)`}`);
     } else if (fm.from === POINT) {
-      if (!instance) {
+      if (twoLevel) {
+        err(`${file}: from "${POINT}" was removed in forest-0.3 — the example it stood for is an instance object (taxon object, instance_of: ${JSON.stringify(fm.to)})`);
+      } else if (!instance) {
         err(`${file}: from is "${POINT}" but kind is ${JSON.stringify(fm.kind)} — ${POINT} is reserved for instance arrows`);
       }
     } else if (instance) {
@@ -672,6 +891,24 @@ function checkStructure(trees, err, warn) {
     if (fm.needs !== undefined && !(isStringArray(fm.needs) && fm.needs.every((s) => s.trim() !== ""))) {
       err(`${file}: needs must be an array of sentences naming extra data (may be empty)`);
     }
+    if (twoLevel && fm.values !== undefined) {
+      err(`${file}: values moved onto the instance object in forest-0.3 — put it on the obj- tree carrying instance_of, keyed by the arrows out of its kind`);
+    }
+
+    // The two levels decide what each end of an arrow may be: a construction
+    // out of a kind applies to every instance of it, while a hom is one map
+    // between two structures, so its ends are instances.
+    if (twoLevel) {
+      for (const end of ["from", "to"]) {
+        const at = isInstance(fm[end]);
+        if (at === null) continue;
+        if (hom && at === false) {
+          err(`${file}: ${end} "${fm[end]}" is a kind — a hom joins two instances (it is one map between two structures), never two kinds`);
+        } else if (!hom && at === true) {
+          err(`${file}: ${end} "${fm[end]}" is an instance (instance_of: ${trees.get(fm[end]).fm.instance_of}) — a ${fm.kind} arrow runs between kinds and applies to every instance of its source`);
+        }
+      }
+    }
 
     if (instance) {
       for (const key of ["acts_on", "on_homomorphisms", "functorial"]) {
@@ -680,26 +917,12 @@ function checkStructure(trees, err, warn) {
         }
       }
       if (fm.values !== undefined) {
-        if (!isPlainObject(fm.values)) {
-          err(`${file}: values must be a mapping from mor- ids to one sentence each`);
-        } else {
-          for (const [id, v] of Object.entries(fm.values)) {
-            const m = treeOfTaxon(id, "morphism");
-            if (!m) {
-              err(`${file}: values key "${id}" must name a morphism tree`);
-            } else if (m.fm.from !== fm.to) {
-              err(`${file}: values key "${id}" is an arrow out of "${m.fm.from}", not out of this instance's target "${fm.to}" (see ${m.file}: from)`);
-            }
-            if (typeof v !== "string" || v.trim() === "") {
-              err(`${file}: values["${id}"] must be one sentence`);
-            }
-          }
-        }
+        checkValuesAgainst(file, fm.to, "this instance's target", fm.values);
       }
     } else if (hom) {
       // A hom is itself a map between two structures of one kind, so the keys
       // that say how a construction treats such maps have nothing to describe.
-      for (const key of ["acts_on", "on_homomorphisms", "functorial", "values"]) {
+      for (const key of ["acts_on", "on_homomorphisms", "functorial", ...(twoLevel ? [] : ["values"])]) {
         if (fm[key] !== undefined) {
           err(`${file}: ${key} is not allowed on a hom arrow — it is itself a map, not a construction acting on maps`);
         }
@@ -710,13 +933,24 @@ function checkStructure(trees, err, warn) {
       const a = rootType(fm.from);
       const b = rootType(fm.to);
       if (a && b && a !== b) {
-        err(`${file}: a hom arrow joins two objects of one type, but from "${fm.from}" is of type "${a}" and to "${fm.to}" of type "${b}"`);
+        if (!twoLevel) {
+          err(`${file}: a hom arrow joins two objects of one type, but from "${fm.from}" is of type "${a}" and to "${fm.to}" of type "${b}"`);
+        } else if (isInstance(fm.from) && isInstance(fm.to) && !anchoredByThirdKind(stem, a, b)) {
+          // Two instances of one kind: a morphism in that kind's category.
+          // Two instances of different kinds: a component of a definition —
+          // the valuation out of a field — and then some kind's `data` has to
+          // say which definition, or the arrow is a claim about nothing. That
+          // kind is a third one: a definition drawn over an instance of either
+          // end's own kind would be circular, and allowing it would let `data`
+          // legalise any arrow between any two named instances.
+          err(`${file}: a hom joins two instances of one kind, but from "${fm.from}" is an instance of "${a}" and to "${fm.to}" of "${b}" — an arrow between instances of different kinds is a component of a definition, so list it in the data of the kind it defines, which is a third kind, neither "${a}" nor "${b}"`);
+        }
       }
       if (fm.invertible !== undefined && typeof fm.invertible !== "boolean") {
         err(`${file}: invertible must be true or false`);
       }
     } else {
-      if (fm.values !== undefined) {
+      if (!twoLevel && fm.values !== undefined) {
         err(`${file}: values is only allowed on an instance arrow (kind: instance)`);
       }
       if (fm.acts_on === undefined) {

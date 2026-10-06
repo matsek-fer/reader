@@ -11,6 +11,7 @@ acts_on: all
 needs: []
 on_homomorphisms: 'Funktor na $G\text{-}\mathbf{Set}$ ($\varphi=\mathrm{id}$): ekvivarijantno $f$ šalje $X^G$ u $Y^G$, jer iz $g\cdot x=x$ slijedi $g\cdot f(x)=f(g\cdot x)=f(x)$. Za promjenjiv $\varphi$ nije funktor: dobije se samo $f(X^G)\subseteq Y^{\varphi(G)}$, što je $Y^H$ tek kad je $\varphi$ surjektivan — fiksne točke su kontravarijantne u grupi, orbite kovarijantne.'
 functorial: true
+region: strukture
 teaches: [orbits-stabilizers]
 requires: []
 depends: [obj-group-action, exp-orbite-i-stabilizatori]

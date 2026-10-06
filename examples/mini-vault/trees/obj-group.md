@@ -4,6 +4,8 @@ taxon: object
 title: "Grupa"
 symbol: '(G, \cdot)'
 hom: 'Homomorfizam $\varphi\colon G\to H$, $\varphi(gh)=\varphi(g)\varphi(h)$; iz toga automatski $\varphi(e)=e$ i $\varphi(g^{-1})=\varphi(g)^{-1}$.'
+region: strukture
+pos: [0, 280]
 teaches: [groups]
 requires: []
 depends: [def-group]

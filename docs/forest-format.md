@@ -1,4 +1,4 @@
-# The Forest vault format — draft 0.2
+# The Forest vault format — draft 0.3
 
 **Status: normative draft.** This document defines the on-disk format the
 Knowledge Forest tools produce when they *digest* a work — a book, a paper,
@@ -7,12 +7,17 @@ teaching objects called **trees**. A second implementation written from
 this document alone should agree with the reference tooling on every vault
 it accepts or rejects.
 
-Two schema versions are current. `forest-0.1` is the format as first
+Three schema versions are current. `forest-0.1` is the format as first
 proven in the field; `forest-0.2` adds the [structure
 layer](#forest-02--the-structure-layer) — objects, morphisms between and
-inside kinds, the `cd` diagram block — and changes nothing else. A 0.1 vault stays valid forever
-and is read exactly as before; only a vault that says `forest-0.2` may use
-the layer, and in a 0.1 vault its taxa and keys are errors.
+inside kinds, the `cd` diagram block — and changes nothing else;
+`forest-0.3` splits that layer into [two levels](#forest-03--the-two-levels)
+— a *kind* of structure and an *instance* of a kind — and changes nothing
+outside it. A 0.1 vault stays valid forever and is read exactly as before;
+a 0.2 vault likewise. Only a vault that says `forest-0.2` may use the
+layer, only one that says `forest-0.3` may use the two levels, and each
+version's own keys are errors one version down, so no vault migrates by
+accident.
 
 It is a draft in the precise sense of the [relationship to spec
 v1](#relationship-to-bundle-spec-v1) section: vaults are a new, local-first
@@ -20,9 +25,14 @@ artifact family, proven here in the field before any of it hardens into the
 `spec` repo's contract.
 
 A worked reference vault lives at
-[`examples/mini-vault/`](../examples/mini-vault/) — most rules below (it is non-derivative, so per-tree provenance is shown by the fixtures instead) is
-exercised there, and the vault doubles as documentation. Open it as an
-Obsidian vault to see the format render.
+[`examples/mini-vault/`](../examples/mini-vault/) — a `forest-0.3` vault in
+which most rules below (it is non-derivative, so per-tree provenance is
+shown by the fixtures instead) is exercised, and the vault doubles as
+documentation. Open it as an Obsidian vault to see the format render. The
+frozen 0.2 reference is the fixture
+[`scripts/test-fixtures/structure-ok-0.2`](../scripts/test-fixtures/structure-ok-0.2/),
+kept passing so the older version stays covered after the mini-vault moved
+on.
 
 ## The model: one vault per digested work
 
@@ -79,7 +89,7 @@ Field by field:
 
 | Field | Type | Rule |
 |---|---|---|
-| `schema_version` | string | `"forest-0.1"`, or `"forest-0.2"` for a vault that uses the [structure layer](#forest-02--the-structure-layer). Nothing else. |
+| `schema_version` | string | `"forest-0.1"`, `"forest-0.2"` for a vault that uses the [structure layer](#forest-02--the-structure-layer), or `"forest-0.3"` for one that uses [the two levels](#forest-03--the-two-levels). Nothing else. |
 | `source.title` | string | The digested work's title, verbatim. |
 | `source.authors` | array of strings | The work's authors. May be empty for anonymous notes. |
 | `source.year` | integer | Year of the edition digested. |
@@ -93,6 +103,7 @@ Field by field:
 | `tool_version` | string | The tool's version, e.g. `"0.1.0"`. |
 | `derivative` | boolean | `true` iff the vault's content is a derivative work of a source the member does not hold redistribution rights to. See [Copyright](#copyright--the-hard-rules). |
 | `notice` | string | **Required iff `derivative` is `true`**, and then exactly `"LOKALNO — izvedeno djelo, ne šalje se u knjižnicu"`. Forbidden otherwise — a non-derivative vault carrying the notice signals a confused provenance claim, the same way a stray `adapted_from` does in bundle v1. |
+| `regions` | array | **Optional, `forest-0.3` only.** `[{ id, title }, …]` — the labelled areas the structure canvas is divided into, in the order the page lays them out. See [Regions](#regions--subgraphs-that-read-on-their-own). |
 
 Unknown keys follow the bundle-spec rule verbatim: **`^x_` keys are allowed
 in every object at every level and must be preserved by every tool that
@@ -128,8 +139,8 @@ frontmatter `taxon` field:
 | `int-` | `intuition` | The mental picture — analogy, visualization, "what it feels like". |
 | `rem-` | `remark` | A short aside: a warning, an edge case, a historical note. |
 | `con-` | `connection` | A bridge between two ideas — an equivalence, a contrast, a generalization. Must name both ends explicitly (from 0.2, also in `about`). |
-| `obj-` | `object` | **forest-0.2 only.** A *kind* of mathematical structure — "a group acting on a set" — never one particular structure; with `type`, a second box of a kind the vault already has. See [Objects](#objects--obj--taxon-object). |
-| `mor-` | `morphism` | **forest-0.2 only.** An arrow between two objects: a construction from one kind of structure to another — orbits, the stabilizer of a point, Cayley's action — or, with `kind: hom`, a map between two structures of one kind. See [Morphisms](#morphisms--mor--taxon-morphism). |
+| `obj-` | `object` | **forest-0.2 and up.** A box of the structure graph. In 0.2: a *kind* of mathematical structure — "a group acting on a set" — never one particular structure; with `type`, a second box of a kind the vault already has. In 0.3: either a kind (no `instance_of`) or an *instance* of one (`instance_of`), generic or named. See [Objects](#objects--obj--taxon-object) and [the two levels](#forest-03--the-two-levels). |
+| `mor-` | `morphism` | **forest-0.2 and up.** An arrow of the structure graph: a construction from one kind of structure to another — orbits, the stabilizer of a point, Cayley's action — or, with `kind: hom`, a map between two structures. See [Morphisms](#morphisms--mor--taxon-morphism). |
 
 Assign the taxon by what the tree *does*, not what it mentions — a
 definition wrapped in a story is still `def-` if the definition is what the
@@ -177,6 +188,7 @@ standalone: true
 | `about` | array | **Optional, forest-0.2 only.** The `obj-`/`mor-` ids this tree is about. See [`about`, `fields` and `assumes`](#about-fields-and-assumes--any-tree). |
 | `fields` | array | **Optional, forest-0.2 only.** Kebab-case field names — `algebra`, `kombinatorika` — the tree matters for. Same section. |
 | `assumes` | array | **Optional, forest-0.2 only.** Kebab-case tokens for the principles the tree depends on — `axiom-of-choice`. Same section. |
+| `region` | string | **Optional, forest-0.3 only.** One kebab-case token: which labelled area of the structure canvas this tree belongs to. See [Regions](#regions--subgraphs-that-read-on-their-own). |
 
 Objects and morphisms add keys of their own, listed in the [structure
 layer](#forest-02--the-structure-layer); every key above applies to them too.
@@ -289,6 +301,14 @@ migrates by accident, and a vault that wants the layer says so by changing
 `schema_version`. Every tool reads both versions. (`x_about` / `x_fields`
 may be trialled on 0.1 trees meanwhile, under the `^x_` rule.)
 
+**Reading this section for a 0.3 vault.** Everything below holds in 0.3 too,
+with three replacements that [the two levels](#forest-03--the-two-levels)
+state in full: a typed object becomes an *instance* (`instance_of` in place
+of `type`), the arrow kind `instance` and the pseudo-id `pt` are gone — an
+example is an instance object, which carries the `values` — and a `hom`
+joins two instances rather than two boxes of one type. A 0.2 vault keeps
+all three for ever.
+
 ### Objects — `obj-`, taxon `object`
 
 An object is a *kind* of structure or a way of presenting one — "a
@@ -299,7 +319,7 @@ never one particular group. Beyond the usual keys its frontmatter has:
 |---|---|---|
 | `symbol` | string | **Required.** LaTeX for the data, **no `$` delimiters** — `(G, X, \rho)`. Typeset whole by the views. |
 | `hom` | string | **Required, except on a typed object**, which inherits its type's and may leave it out. One sentence in the vault's language, inline `$…$` math allowed: what a map between two structures of this kind is. For actions, the equivariant maps. |
-| `type` | string | **Optional.** The id of another object tree in this vault: this box is *another object of that kind*. The type must itself have no `type` — one level only. See [Typed objects](#typed-objects--two-boxes-of-one-kind). |
+| `type` | string | **Optional, 0.2 only.** The id of another object tree in this vault: this box is *another object of that kind*. The type must itself have no `type` — one level only. See [Typed objects](#typed-objects--two-boxes-of-one-kind). In 0.3 this is `instance_of`, and `type` is an error. |
 | `same_as` | string | **Optional.** The id of the object in the library forest that this one is the same as — cross-vault identity, since registry concepts are coarser than objects. The library is another repository, so the validator checks only the shape (`obj-<kebab>`); `/grow` resolves it. |
 | `nlab` | object | **Optional.** `{ title, revision }` — the nLab page and revision whose section skeleton and link list were consulted. Credit, not content: no nLab prose enters a tree. |
 
@@ -383,7 +403,7 @@ Beyond the usual keys:
 | `inverse` | string | **Optional.** A `mor-` id that must point back (`inverse` is symmetric). Marks an isomorphism of kinds — `mor-curry` / `mor-uncurry` — or, between two homs, a map and its inverse. |
 | `up_to` | string | **Optional; requires `inverse`.** The id of a tree, of any taxon, stating the canonical isomorphism up to which the inverse holds. See [Inverse up to a canonical isomorphism](#inverse-up-to-a-canonical-isomorphism--up_to). |
 | `generalized_by` | array | **Optional.** `mor-` ids of arrows of which this one is a special case: $G$ on itself is $G$ on $G/H$ with $H=\{e\}$. |
-| `values` | object | **`kind: instance` only.** A map from `mor-` ids whose `from` equals this arrow's `to`, to one sentence each — what that arrow yields on this example (`mor-orbits: "ogrlice; ima ih $14$"`). This is how an arrow carries its examples without new authoring. |
+| `values` | object | **`kind: instance` only; 0.2 only.** A map from `mor-` ids whose `from` equals this arrow's `to`, to one sentence each — what that arrow yields on this example (`mor-orbits: "ogrlice; ima ih $14$"`). This is how an arrow carries its examples without new authoring. In 0.3 it lives on the instance object. |
 
 Eight kinds, closed — seven sorts of construction (an `instance` being the
 degenerate one, from `pt`) and the one kind of arrow inside a kind:
@@ -516,6 +536,12 @@ what an arrow consumes](#morphisms--mor--taxon-morphism), applied to a
 datum that is a whole structure. Bodies call it a pair; the word "product"
 is kept for a reader who asks for it.
 
+**This device is gone in 0.3.** The ambient category of such a pair is never
+clear, and the box earns nothing: a structure made of two things and a map
+between them is a *kind* with a [defining
+diagram](#a-kind-is-defined-by-a-diagram--data), and the arrows out of the
+kind reach each piece. A 0.3 vault introduces no pair object.
+
 ### `about`, `fields` and `assumes` — any tree
 
 Any tree in a 0.2 vault may carry:
@@ -638,10 +664,11 @@ needed to display it:
   `cdCss()`, so `build-views.mjs` and `serve-vault.mjs` include the same
   rules.
 
-### What the validator checks
+### What the validator checks — 0.2
 
 In a 0.2 vault, `checkStructure` in `scripts/validate-forest.mjs` adds the
-rules below to every 0.1 rule. Each error names the file and the key.
+rules below to every 0.1 rule. Each error names the file and the key. A 0.3
+vault runs the same function under [its own rules](#what-the-validator-checks--03).
 
 Errors:
 
@@ -681,19 +708,23 @@ DAG over all trees, `pt` never among them.
 
 ### Other tools
 
-- `scripts/index-vault.mjs` accepts both versions. A structure tree's
+- `scripts/index-vault.mjs` accepts all three versions. A structure tree's
   `symbol` or `statement` joins the embedded text right after the title,
   so a query like `X/G` finds the arrow whose body never spells it out;
   items keep their taxon; the D-003 embedding convention is unchanged. A
   morphism's search group is its `from` object's `index.md` section, for
-  a hom and a loop as for any arrow.
+  a hom and a loop as for any arrow — and in 0.3 an instance's group is its
+  kind's, so kinds and instances are indexed alike and land together.
 - `scripts/grow-trees.mjs` writes frontmatter with js-yaml, so a `needs`
   sentence holding a comma or a colon round-trips, and resolves `from`,
-  `to`, `type`, `inverse`, `up_to`, `acts_on`, `about`, `generalized_by`
-  and the keys of `values` the way it resolves `depends` when a tree is
-  renamed or remapped on its way into the library forest. A `type` that
-  does not resolve is kept and flagged, like an endpoint; an `up_to` that
-  does not, or whose `inverse` was dropped, is dropped with a note.
+  `to`, `type`, `instance_of`, `inverse`, `up_to`, `acts_on`, `about`,
+  `generalized_by`, the entries of `data` and the keys of `values` the way
+  it resolves `depends` when a tree is renamed or remapped on its way into
+  the library forest. An endpoint, a level pointer and a `data` entry that
+  do not resolve are kept and flagged, since dropping one would silently
+  change a definition; an `up_to` that does not, or whose `inverse` was
+  dropped, is dropped with a note. `pos` and `region` carry over as they
+  are.
 - `scripts/build-views.mjs` gives a vault with objects a second tab,
   *Struktura*: objects as boxes, arrows coloured by kind (a hom is
   *morfizam*), an inverse pair as one two-headed edge whose labels are
@@ -702,7 +733,359 @@ DAG over all trees, `pt` never among them.
   (*Isti tip kao*), shows the inherited `hom` and lists the type's
   constructions (*Strelice tipa*); an arrow's page shows *Izomorfizam* for
   `invertible` and *Inverz (do na kanonski izomorfizam)* with the `up_to`
-  tree; any tree's page shows *Pretpostavlja* for `assumes`.
+  tree; any tree's page shows *Pretpostavlja* for `assumes`. In a 0.3 vault
+  the same tab draws both levels: a kind's page lists its instances and its
+  defining diagram, an instance's page its kind and its `values`, the canvas
+  is divided into the declared [regions](#regions--subgraphs-that-read-on-their-own),
+  and an authored [`pos`](#layout--authored-positions) is honoured where it
+  is given.
+
+## forest-0.3 — the two levels
+
+A vault whose `forest.json` says `"schema_version": "forest-0.3"` draws the
+structure graph on **two levels**, and the whole of this version is that one
+distinction:
+
+- a **kind** is a sort of structure — *a field*, *a valuation*, *a group
+  acting on a set*. Statements quantify over it ("for every valuation…"),
+  and the arrows out of it are the things one can build, extract or measure
+  from any structure of that sort.
+- an **instance** is *one* structure of a kind — *the field of real
+  numbers*, *a field $K$*, *the ordered group $\Gamma$*. Between two
+  instances it makes sense to draw a map; between two kinds it does not.
+
+Both are `obj-` trees, `taxon: object`, boxes on the canvas. The format does
+not distinguish a *named* instance from a *generic* one: "the field of real
+numbers" and "a field $K$" are both instances, and a generic one simply has
+a generic title and symbol. The point of the generic instance is that a
+proof can be told one level lower than the kinds — naming the objects it
+actually works with — without inventing anything: $K$, then $\mathbb{R}$,
+are two instances of one kind, and what holds of the kind holds of both.
+
+The level a box sits on is one key:
+
+| Field | Type | Rule |
+|---|---|---|
+| `instance_of` | string | **Optional; its presence is the level.** Absent: this object is a kind. Present: the id of a **kind** object in this vault — this object is one structure of that sort. One level only: the target must itself carry no `instance_of`. Replaces 0.2's `type`, which is an error in a 0.3 vault. |
+| `data` | array | **Optional, kinds only.** The ids that make up this kind's *defining diagram* — see [below](#a-kind-is-defined-by-a-diagram--data). A kind with no `data` is primitive and valid. |
+| `values` | object | **Optional, instances only.** `{ <mor- id>: "<one sentence>" }` — what each arrow out of this instance's kind yields here. Each key must be an arrow whose `from` is this instance's kind. Replaces 0.2's `values` on an instance arrow, which is an error in a 0.3 vault. |
+| `pos` | array | **Optional, objects only.** `[x, y]`, two finite numbers in canvas units — the authored position of this box. See [Layout](#layout--authored-positions). |
+
+`symbol` stays required on every object. `hom` is required on a **kind** and
+optional on an **instance**, which inherits its kind's: a map between two
+structures of a kind is a property of the kind, stated once.
+
+```yaml
+# trees/obj-valuation.md — a kind
+id: obj-valuation
+taxon: object
+symbol: 'v\colon K\to\Gamma\cup\{\infty\}'
+hom: 'A field homomorphism $K\to K''$ and a map of ordered groups $\Gamma\to\Gamma''$ that commute with the two valuations.'
+data: [obj-a-field, obj-value-group-gamma, mor-v]
+region: valuations
+pos: [260, 0]
+
+# trees/obj-reals.md — an instance of another kind, named
+id: obj-reals
+taxon: object
+symbol: '\mathbb{R}'
+instance_of: obj-field
+values:
+  mor-field-units: 'every positive real has a square root, so $\mathbb{R}^\times/(\mathbb{R}^\times)^2$ has two elements'
+```
+
+### A kind is defined by a diagram — `data`
+
+A kind is not a bare name: it is **a diagram over instances of other
+kinds**. A valuation is a field $K$, an ordered abelian group $\Gamma$ with
+$\infty$ adjoined, and a map $v$ from the first to the second (plus axioms,
+which live in the body). A group action is a group $G$, a set $X$ and the
+rule $\rho$ between them. A subgroup is a group $H$, a group $G$ and the
+inclusion $H\to G$.
+
+`data` lists exactly that diagram — the instance objects, and the arrows
+between them:
+
+- every id in `data` must resolve to a tree of this vault;
+- every **object** listed must be an instance (carry `instance_of`): a
+  defining diagram is drawn over instances, never over kinds;
+- every object listed must be an instance of **another** kind: a valuation
+  is defined over a field and an ordered group, never over a valuation. An
+  instance of the kind being defined makes the definition circular, and it
+  would also turn `data` into a licence for any arrow at all — see the
+  chain of named instances below;
+- every **arrow** listed must have **both** ends among the listed ids —
+  a diagram missing one of an arrow's ends is not the definition it claims;
+- a listed object's `about` may name another **component of the same
+  diagram** — that is a component saying it is *determined* by another, the
+  vertex set of the dissection the diagram already carries — but not an
+  instance from outside it. An `about` reaching outward means the box is a
+  link of [a proof's chain](#a-chain-of-named-instances), and a named object
+  the proof constructs is part of nobody's definition;
+- an entry of any other taxon is an error;
+- a kind with no `data` is **primitive**: the vault simply does not spell
+  its definition out as a diagram, and that is valid. `obj-set` is usually
+  one, and so is any kind whose data are not instances of kinds the vault
+  carries: a dissection is a polygon and a finite family of triangles, and
+  listing the plane it is drawn in would not define it — as "a subgroup" is
+  not defined by naming a group.
+
+This is what replaces the pair (product) object of 0.2. **Never introduce an
+object whose symbol is a pair in order to give an arrow two sources.** The
+ambient category of such a pair is unclear and it buys nothing: if a
+structure consists of two things and a map between them, that *is* a kind
+with a defining diagram, and the arrows out of the kind reach each piece.
+
+### Which level each arrow touches
+
+| arrow kinds | `from`, `to` |
+|---|---|
+| `data`, `transform`, `extract`, `property`, `generalizes`, `construction` | **kinds.** A construction out of a kind applies to *every* instance of it — which is why an instance's `values` is keyed by the arrows out of its kind, and why no arrow has to be repeated per example. |
+| `hom` | **instances.** A hom is one map between two structures, so each end is one structure. |
+
+A hom comes in two readings, and the format tells them apart by the levels
+of its ends:
+
+- **two instances of the same kind** — the equivariant map between two
+  actions of one group, a field homomorphism $K\to K'$: a morphism in that
+  kind's category. `invertible` says whether it is an isomorphism, as in
+  0.2, and is left out for a general map.
+- **two instances of different kinds** — the valuation $v\colon K\to\Gamma$,
+  the action rule $\rho$ from a group to a set: a **component of a
+  definition**. Such an arrow is legal exactly when some kind's `data`
+  lists it; otherwise it is an unanchored claim, and the validator says so.
+  (The listing also forces both its ends into that diagram.) The kind doing
+  the anchoring is a **third** kind, neither end's own: a definition drawn
+  over an instance of the kind it defines would be circular, and allowing it
+  would make `data` a licence for any arrow between any two named instances.
+
+The kinds `instance` and the pseudo-id `pt` are **removed**. What they
+expressed — "this is an example of that kind" — is an instance object, and
+what was useful about them, `values`, moved onto it. In a 0.3 vault
+`kind: instance` and `from: pt` are errors that name the replacement.
+
+Loops are unchanged: a hom from an instance to itself, or a construction
+from a kind to itself, has `from` equal to `to`, and the views draw it as a
+loop and, on the arrow's page, unrolled into a chain. `inverse`, `up_to`,
+`generalized_by`, `acts_on`, `needs`, `on_homomorphisms`, `functorial`,
+`about`, `fields` and `assumes` all keep their 0.2 meanings exactly.
+
+### A chain of named instances
+
+A proof often runs through named objects: the real field $\mathbb{R}$, then a
+valuation on it, then the valuation it induces on the plane, then the
+colouring that valuation affords. Each link is a construction between kinds
+applied to a particular instance — and **that is not an arrow in this
+format**. The arrow already exists one level up, between the kinds, and it
+applies to every instance of its source; a second copy of it between two
+named boxes would say nothing new and would put a construction on the
+instance level, where the validator refuses it.
+
+Write the chain like this:
+
+- the **earlier** instance carries `values` keyed by the construction out of
+  its kind, and the sentence names what it yields here — on `obj-reals`,
+  `mor-extend: "a 2-adic valuation on $\mathbb{R}$, the instance
+  obj-v-reals"`;
+- the **later** instance carries `about: [<earlier instance>, <that
+  construction>]`, so the two boxes and the arrow between their kinds are
+  what the tree is about;
+- its body states the identity in one sentence: *this is what `mor-extend`
+  yields on $\mathbb{R}$.*
+
+What not to do, in both cases because it collapses the two levels the
+version exists to keep apart: do **not** invent a `hom` between the two
+named instances (they are instances of different kinds, and the hom would
+then need a kind to anchor it — it is a step of a proof, not a component of
+anybody's definition), and do **not** list a link of the chain in a kind's
+`data`. The reader follows the chain from each named box up its tie to its
+kind, along the construction, and back down to the next named box; the panel
+shows both ends of that path.
+
+The one case that looks like the chain and is not: a component of a defining
+diagram that is *determined* by another component of the **same** diagram —
+the vertex set $V(\mathcal T)$ in the definition of a coloured dissection,
+which is what `mor-vertices` yields on the dissection the diagram already
+names. That box carries the same `values`/`about` pair, and it belongs in
+`data`, because a diagram over "a dissection, some set, three colours" would
+not define a coloured dissection at all: nothing would tie the set to the
+dissection. The test, and what the validator applies, is where the `about`
+points. Inside the diagram: a component determined by a component, good
+authoring. Outside it: a step of a proof, refused.
+
+### Regions — subgraphs that read on their own
+
+One canvas holding every arrow of a long proof is unreadable, and splitting
+the vault in two is worse: the pieces share objects. So a vault divides one
+canvas into **labelled regions**, each meant to be read on its own, and the
+reader pans between them.
+
+Any tree may carry `region: <kebab token>`. `forest.json` may declare the
+regions and their order:
+
+```json
+"regions": [
+  { "id": "valuation", "title": "Valuacije i njihove instance" },
+  { "id": "colouring", "title": "Od valuacije do bojanja" }
+]
+```
+
+Each `id` is a kebab-case token, unique in the list; each `title` is a
+non-empty label in the vault's language. `regions` is optional, and a tree's
+`region` need not be declared: an unknown or absent region means an
+unlabelled area of the canvas. When the vault does declare regions, a tree
+naming one that is not declared draws a **warning**, because that is almost
+always a typo.
+
+### Layout — authored positions
+
+Positions are authored, not only computed. An object may carry
+`pos: [x, y]`, two finite numbers in canvas units — the box's top-left
+corner, read against **its own region's frame**, growing right and
+down. Objects without `pos` are
+placed by the existing algorithm in the gaps the authored ones leave, and
+authored positions survive a rebuild of the views, because they live in the
+trees and nothing in `views/` is an input. Because `pos` is read against the
+frame, a region that grows above does not drag the hand-laid boxes below it.
+
+An arrow is drawn **straight**, border to border, and nothing bends: clearance
+is the layout's job. Three things do it, and the build names every arrow left
+with a box on it, so the failure is visible rather than hidden in a curve.
+
+1. Inside a region, a seeded force walk pushes every box off the arrows that
+   are not its own. Only boxes without `pos` move.
+2. The frames are shelved into rows, and **every other row is laid backwards**
+   — the way a field is ploughed. Two regions the vault declares one after the
+   other are then neighbours even across a row break, where a plain
+   left-to-right shelf would throw them to opposite ends of the canvas.
+3. A second walk then runs over the whole plane, because the per-region walk
+   never sees an arrow whose two ends are in two regions: its corridor crosses
+   frames that walk never looked at. The frames are remeasured and reshelved
+   after it, so a box that moved takes its region's area with it.
+
+The page opens the canvas at a zoom where a box title is still a word, not
+fitted to the whole plane; when the plane will not go that large it opens on
+the first declared region and the reader pans. Dragging a box and saving the
+arrangement writes `pos` back — see [Regions](#regions--subgraphs-that-read-on-their-own)
+and the page's own footer hint.
+
+### `index.md` in a 0.3 vault
+
+`## Struktura` (`## Structure`) lists the **kinds**. Instances and arrows are
+not listed: the views attach each instance to its kind and each arrow to its
+`from`, so a kind's page gathers its instances the way a statement's page
+gathers its proofs. `scripts/index-vault.mjs` uses the same two rules when
+it assigns a tree its search group.
+
+### What the validator checks — 0.3
+
+Every 0.1 rule, every 0.2 rule that survives, and:
+
+- `instance_of`, when present, names an object tree of this vault, not the
+  object itself, that carries no `instance_of` of its own.
+- `hom` is required on an object without `instance_of`, optional on one with.
+- `type` on an object is an error naming `instance_of`.
+- `data`, on a kind, is an array of ids that all resolve; each object listed
+  carries `instance_of`, and that `instance_of` is some *other* kind, not the
+  one being defined; each morphism listed has both `from` and `to` among the
+  listed ids; every instance a listed object's `about` names is itself listed;
+  no other taxon may be listed. `data` on an instance is an error.
+- `values`, on an instance, is a mapping whose keys name morphisms whose
+  `from` is this instance's kind and whose values are non-empty strings.
+  `values` on a kind is an error, and `values` on a morphism is an error
+  naming the instance object.
+- `pos`, on an object, is `[x, y]`, two finite numbers.
+- `region`, on any tree, is a kebab-case token; `forest.json`'s `regions`,
+  when present, is an array of `{ id, title }` with kebab-case unique ids
+  and non-empty titles.
+- `kind: instance` and `from: "pt"` are errors naming the instance object.
+- A construction (`data`, `transform`, `extract`, `property`,
+  `generalizes`, `construction`) has a kind at each end; a `hom` has an
+  instance at each end.
+- A `hom` whose two instances are of different kinds must be listed in the
+  `data` of some kind that is neither end's kind.
+
+Warnings, for every **kind** (an instance draws none, as a typed object drew
+none in 0.2): no instance object of it; no `generalizes` arrow in either
+direction; a body without a `## Definicija` / `## Definition` heading. Plus
+the undeclared-region warning above.
+
+In a 0.2 vault, `instance_of`, `data`, `pos`, `region` and `forest.json`'s
+`regions` are unknown keys — the same one-way switch 0.1 has against 0.2.
+
+### Migrating a 0.2 vault to 0.3
+
+Mechanical, in this order. Nothing outside the structure layer changes, and
+no body has to be rewritten except where it names a renamed id.
+
+1. **`forest.json`**: `schema_version` becomes `"forest-0.3"`. Optionally
+   add `regions`.
+2. **Typed objects become instances**: on every object, `type: K` becomes
+   `instance_of: K`. Nothing else about the tree changes — it already had
+   its own `symbol` and no `hom`.
+3. **Instance arrows become instance objects.** For each `mor-X` with
+   `kind: instance` and `to: K`, write `obj-X` with `taxon: object`, the
+   same `title`, `symbol` = the arrow's `statement`, `instance_of: K`, the
+   arrow's `values` verbatim, and its `teaches` / `requires` / `depends` /
+   `standalone` / `language` / `origin` unchanged. Drop `kind`, `from`,
+   `to`, `needs` and `label` (if `label` said something the symbol does
+   not, the body says it instead). Delete the `mor-X` file and rewrite
+   every `[[mor-X]]` wikilink and every `about: [… mor-X …]` to `obj-X`.
+4. **Re-point hom arrows at instances.** A `hom` whose `from` or `to` is a
+   kind needs an instance of that kind: if the vault has none, add one — a
+   generic instance, titled in words ("a group $G$"), `instance_of` the
+   kind, no `hom`, a two-sentence body. A 0.2 pair of boxes of one type is
+   already two instances of one kind after step 2, so only the kind's own
+   box has to move.
+5. **Give the kinds their defining diagrams** where the work defines them
+   by data: `data: [<instances>, <arrows between them>]`, adding the
+   instance objects — of *other* kinds — and the component arrows that
+   diagram needs. Optional —
+   a kind with no `data` stays valid — but it is where most of 0.3's value
+   is. Any pair/product object introduced in 0.2 to give an arrow two
+   sources is deleted here and replaced by the kind's diagram.
+6. **Add `region` and `pos`** where the canvas wants grouping or a hand-laid
+   layout. Both optional.
+7. Rerun `scripts/validate-forest.mjs`, then `scripts/build-views.mjs` and
+   `scripts/index-vault.mjs`.
+
+`examples/mini-vault` is this recipe applied: it was the reference 0.2 vault
+and is now the reference 0.3 one, and
+`scripts/test-fixtures/structure-ok-0.2` is its 0.2 counterpart, frozen so
+the older version stays covered.
+
+### Authoring rules, 0.3
+
+1. **A kind, or an instance?** If a sentence about it begins "for every…",
+   it is a kind. If one can point at it and draw a map out of it, it is an
+   instance. A proof that names the objects it works on names instances.
+2. **Never a pair object.** A structure made of two things and a map is a
+   kind with a defining diagram, not an object whose symbol is a pair. The
+   word *product* does not appear in a body for this, and neither does a
+   box for the pair.
+3. **One instance per role, not per name.** Two instances of one kind in two
+   roles — the group that acts and the group that contains a subgroup — stay
+   two boxes even when both are "a group $G$"; the roles are what the
+   diagram is about.
+4. **An instance's body is short.** Two or three sentences: what it is, what
+   it is there for, which arrow starts or ends at it. The mathematics is on
+   the kind.
+5. **`values` only for what is computed.** A `values` sentence restates a
+   result the vault actually has — a number the work computes, a set the
+   example lists — never a guess.
+6. **Categorical vocabulary stays in the structure.** In a vault digested
+   from a work that is not categorical, bodies do not say "product",
+   "functor", "natural" or "category" unless the member asks. `instance_of`,
+   `data`, `hom` and `functorial` already carry those notions, and the
+   reader meets the mathematics instead of its name.
+7. **A step of a proof is not an arrow.** When one named instance is what a
+   construction yields on another, write it as
+   [a chain](#a-chain-of-named-instances) — `values`, `about` and the body —
+   never as a `hom` between the two, and never by listing a link of that
+   chain in a kind's `data`. `data` is the definition of a kind, not a place
+   to park an arrow the levels would otherwise refuse. Inside one defining
+   diagram the same keys say something else and are welcome: a component
+   determined by another component of that diagram.
 
 ## index.md — the work's root
 
@@ -890,8 +1273,8 @@ five with the formal kinds digested mathematics needs.
 — the digester has produced real vaults, the reader walks them, the sharp
 edges are filed — the format is promoted into the `spec` repo as a
 schema-backed contract (its own schema file, validator rules, a decision
-log entry), and `schema_version` graduates from `forest-0.1` / `forest-0.2`
-accordingly. Until then, this file is normative and tools pin against it.
+log entry), and `schema_version` graduates from `forest-0.1` /
+`forest-0.2` / `forest-0.3` accordingly. Until then, this file is normative and tools pin against it.
 
 ### `source.redistribution` — the third provenance state
 

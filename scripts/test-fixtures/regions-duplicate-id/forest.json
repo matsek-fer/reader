@@ -1,0 +1,20 @@
+{
+  "schema_version": "forest-0.3",
+  "source": {
+    "title": "Fixture bilješke o strukturi",
+    "authors": [],
+    "year": 2026,
+    "kind": "notes",
+    "license": "CC-BY-4.0"
+  },
+  "language": "hr",
+  "created": "2026-10-05",
+  "tool": "forest-digest",
+  "tool_version": "0.3.0",
+  "derivative": false,
+  "regions": [
+    { "id": "strukture", "title": "Vrste struktura" },
+    { "id": "strukture", "title": "Definicijski dijagrami" },
+    { "id": "primjeri", "title": "Primjeri i preslikavanja" }
+  ]
+}

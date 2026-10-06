@@ -53,8 +53,10 @@ const WATCHER_STALE_MS = 90_000;
 // hands, so it is validated here, at the door, with one regex both ends use.
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+const OBJ_RE = /^obj-[a-z0-9]+(-[a-z0-9]+)*$/;
 const TRAIL_MAX = 12;
 const PROGRESS_MAX = 200;
+const LAYOUT_MAX = 500;
 
 // Read per request, not once: a tree grown during a session has to be a
 // known id for the next request's `tree` and for the answer's wikilinks.
@@ -194,6 +196,33 @@ async function handle(req, res) {
     }, null, 2) + "\n");
     fs.renameSync(tmp, path.join(dir, "request.json"));
     return json(res, 200, { id, watcher: watcherState() });
+  }
+
+  // The only thing the page is allowed to write into the vault: where the
+  // author dragged the boxes of the structure canvas. One file at the vault
+  // root, replaced whole and atomically, in the coordinates build-views.mjs
+  // reads back over each object's `pos` — which is what makes a hand-laid
+  // canvas survive the next build. A page opened from file:// has no server
+  // and offers the same JSON for copying instead.
+  if (req.method === "POST" && url.pathname === "/api/layout") {
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: "bad json" }); }
+    const known = treeIds();
+    const entries = Object.entries(body?.pos ?? {});
+    if (!entries.length) return json(res, 400, { error: "no positions" });
+    if (entries.length > LAYOUT_MAX) return json(res, 400, { error: "too many positions" });
+    const pos = {};
+    for (const [id, p] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+      if (!OBJ_RE.test(id) || !known.has(id)) return json(res, 400, { error: `unknown object "${id}"` });
+      const ok = Array.isArray(p) && p.length === 2 &&
+        p.every((n) => typeof n === "number" && Number.isFinite(n));
+      if (!ok) return json(res, 400, { error: `bad position for "${id}"` });
+      pos[id] = [Math.round(p[0]), Math.round(p[1])];
+    }
+    const tmp = path.join(vault, ".structure-layout.json.tmp");
+    fs.writeFileSync(tmp, JSON.stringify({ pos }, null, 2) + "\n");
+    fs.renameSync(tmp, path.join(vault, "structure-layout.json"));
+    return json(res, 200, { ok: true, file: "structure-layout.json", count: Object.keys(pos).length });
   }
 
   // The tutor section polls this: the session's state plus its notes already

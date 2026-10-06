@@ -188,16 +188,27 @@ for (const id of picked) {
     }
   }
 
-  // Structure edges (forest-0.2) follow the same resolution as depends. The
-  // endpoints are required, so an unresolvable from/to is kept and noted —
+  // Structure edges (forest-0.2 and up) follow the same resolution as depends.
+  // The endpoints are required, so an unresolvable from/to is kept and noted —
   // the forest validator refuses the tree on arrival, which beats a guess.
-  // A typed object's type is kept the same way: dropped, the box would pass
-  // for a kind of its own.
-  for (const k of ["from", "to", "type"]) {
+  // An object's level pointer is kept the same way: dropped, an instance would
+  // pass for a kind of its own.
+  for (const k of ["from", "to", "type", "instance_of"]) {
     if (typeof fm[k] !== "string" || fm[k] === "pt") continue;
     const r = resolve(fm[k]);
     if (r) fm[k] = r;
     else notes.push(`${k} ${newId} → ${fm[k]} does not resolve (not grown, not remapped, not in forest) — fix it before merging`);
+  }
+  // A kind's defining diagram is part of the definition, not a decoration, so
+  // an entry that does not resolve is kept and flagged rather than dropped:
+  // a diagram missing one box is a different definition.
+  if (Array.isArray(fm.data)) {
+    fm.data = fm.data.map((d) => {
+      const r = resolve(d);
+      if (r) return r;
+      notes.push(`data entry ${newId} → ${d} does not resolve (not grown, not remapped, not in forest) — fix it before merging`);
+      return d;
+    });
   }
   if (typeof fm.inverse === "string") {
     const r = resolve(fm.inverse);

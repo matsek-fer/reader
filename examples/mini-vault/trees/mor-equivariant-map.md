@@ -3,22 +3,24 @@ id: mor-equivariant-map
 taxon: morphism
 title: "Ekvivarijantno preslikavanje"
 kind: hom
-from: obj-group-action
+from: obj-group-action-source
 to: obj-group-action-target
 statement: 'f\colon X\to Y,\quad f(g\cdot x)=g\cdot f(x)\ \text{za sve } g\in G,\ x\in X'
 label: 'f'
 needs: []
+region: primjeri
 teaches: [group-actions]
 requires: []
-depends: [obj-group-action, obj-group-action-target]
+depends: [obj-group-action-source, obj-group-action-target]
 standalone: true
 language: hr
 origin: agent
 ---
 
-Neka ista grupa $G$ djeluje na skupu $X$ i na skupu $Y$ ([[obj-group-action]],
-[[obj-group-action-target]]). Funkcija $f\colon X\to Y$ **ekvivarijantna** je
-ako poštuje oba djelovanja:
+Neka ista grupa $G$ djeluje na skupu $X$ i na skupu $Y$
+([[obj-group-action-source]] i [[obj-group-action-target]] — dvije instance
+iste vrste [[obj-group-action]], pa je ovo preslikavanje morfizam u njoj).
+Funkcija $f\colon X\to Y$ **ekvivarijantna** je ako poštuje oba djelovanja:
 
 $$f(g\cdot x)=g\cdot f(x)\qquad\text{za sve } g\in G,\ x\in X,$$
 

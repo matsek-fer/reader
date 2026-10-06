@@ -140,6 +140,62 @@ test("an object with nlab and an instance with values round-trip, and id remaps 
   assert.match(r.stderr, /dropped values entry mor-ogrlice-z6 → mor-orbits/);
 });
 
+test("forest-0.3 keys follow a rename: instance_of, data entries and values keys; pos rides along", () => {
+  const base = { teaches: [], requires: [], depends: [], standalone: true, language: "hr", origin: "member" };
+  const set = { id: "obj-skup", taxon: "object", title: "Skup", symbol: "X", hom: "Funkcija $f\\colon X\\to Y$.", region: "strukture", pos: [0, 0], ...base };
+  const carrier = { id: "obj-nosivi-skup", taxon: "object", title: "Nosivi skup", symbol: "X", instance_of: "obj-skup", region: "definicije", ...base, depends: ["obj-skup"] };
+  const op = {
+    id: "mor-operacija", taxon: "morphism", title: "Operacija", kind: "hom",
+    from: "obj-nosivi-skup", to: "obj-nosivi-skup", statement: "m\\colon X\\times X\\to X", needs: [], region: "definicije", ...base, depends: ["obj-nosivi-skup"],
+  };
+  const group = {
+    id: "obj-grupa", taxon: "object", title: "Grupa", symbol: "(G, \\cdot)",
+    hom: "Homomorfizam $\\varphi\\colon G\\to H$.", data: ["obj-nosivi-skup", "mor-operacija"],
+    region: "strukture", pos: [320, 0], ...base, depends: ["obj-nosivi-skup", "mor-operacija"],
+  };
+  const forget = {
+    id: "mor-nosac", taxon: "morphism", title: "Nosač", kind: "data", from: "obj-grupa", to: "obj-skup",
+    statement: "(G,\\cdot)\\mapsto G", acts_on: "all", needs: [], on_homomorphisms: "$\\varphi$ kao funkcija.",
+    functorial: true, region: "strukture", ...base, depends: ["obj-grupa", "obj-skup"],
+  };
+  const z6 = {
+    id: "obj-z6", taxon: "object", title: "Ciklička grupa reda šest", symbol: "(\\mathbb{Z}_6, +)",
+    instance_of: "obj-grupa", region: "primjeri", values: { "mor-nosac": "skup $\\{0,\\dots,5\\}$" },
+    ...base, depends: ["obj-grupa"],
+  };
+  const vault = makeVault([[set, "## Definicija\nSkup."], [carrier, "Jedan skup."], [op, "Petlja."], [group, "## Definicija\nGrupa."], [forget, "Zaboravlja operaciju."], [z6, "Ostatci."]]);
+
+  // The forest already holds another obj-grupa, so the grown one is renamed and
+  // every key that names it — instance_of, data, from — has to follow.
+  const forest = fs.mkdtempSync(path.join(os.tmpdir(), "grow-trees-forest-"));
+  fs.mkdirSync(path.join(forest, "trees"));
+  fs.writeFileSync(path.join(forest, "trees", "obj-grupa.md"), `---\n${dump({ ...group, hom: "Nešto drugo." })}---\n\nDrugo stablo.\n`);
+  const out = path.join(vault, "out");
+  const r = run([vault, forest, "--trees", "obj-skup,obj-nosivi-skup,mor-operacija,obj-grupa,mor-nosac,obj-z6", "--out", out]);
+  assert.equal(r.status, 0, r.stderr);
+
+  const grownGroup = grown(out, "obj-grupa-2").fm;
+  assert.deepEqual(grownGroup.data, ["obj-nosivi-skup", "mor-operacija"]);
+  assert.deepEqual(grownGroup.pos, [320, 0]);
+  assert.equal(grownGroup.region, "strukture");
+  assert.equal(grown(out, "obj-z6").fm.instance_of, "obj-grupa-2");
+  assert.equal(grown(out, "mor-nosac").fm.from, "obj-grupa-2");
+  assert.deepEqual(grown(out, "obj-z6").fm.values, { "mor-nosac": "skup $\\{0,\\dots,5\\}$" });
+
+  // Into an empty forest, with the diagram's pieces left behind: the entries
+  // are kept and flagged, because a diagram missing a box is another definition.
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "grow-trees-forest-"));
+  const out2 = path.join(vault, "out2");
+  const r2 = run([vault, empty, "--trees", "obj-grupa,obj-z6", "--out", out2]);
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.deepEqual(grown(out2, "obj-grupa").fm.data, ["obj-nosivi-skup", "mor-operacija"]);
+  assert.match(r2.stderr, /data entry obj-grupa → obj-nosivi-skup does not resolve/);
+  assert.match(r2.stderr, /data entry obj-grupa → mor-operacija does not resolve/);
+  // The instance's values key is a decoration, not a definition: it goes.
+  assert.deepEqual(grown(out2, "obj-z6").fm.values, {});
+  assert.match(r2.stderr, /dropped values entry obj-z6 → mor-nosac/);
+});
+
 test("type and up_to are ids: they follow a rename, and up_to goes when it cannot", () => {
   const base = { teaches: [], requires: [], depends: [], standalone: true, language: "hr", origin: "member" };
   const group = { id: "obj-group", taxon: "object", title: "Grupa", symbol: "(G, \\cdot)", hom: "Homomorfizam $\\varphi\\colon G\\to H$.", ...base };

@@ -4,6 +4,8 @@ taxon: object
 title: "Skup"
 symbol: 'X'
 hom: 'Funkcija $f\colon X\to Y$; bijekcija je izomorfizam skupova.'
+region: strukture
+pos: [0, 0]
 teaches: [sets]
 requires: []
 depends: []
@@ -29,7 +31,7 @@ Jedina invarijanta konačnog skupa jest broj elemenata $|X|$: dva konačna skupa
 u bijekciji su točno kad imaju jednako mnogo elemenata.
 
 ## Primjeri
-$\{0,1\}^6$, nizovi od šest perli u dvije boje ([[mor-ogrlice-z6]]); skup orbita
+$\{0,1\}^6$, nizovi od šest perli u dvije boje ([[obj-ogrlice-z6]]); skup orbita
 $X/G$ nekog djelovanja ([[mor-orbits]]); nosivi skup grupe kad zaboravimo
 množenje.
 

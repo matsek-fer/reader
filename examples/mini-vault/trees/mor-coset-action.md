@@ -11,6 +11,7 @@ acts_on: all
 needs: []
 on_homomorphisms: '$\varphi\colon G_1\to G_2$ s $\varphi(H_1)\subseteq H_2$ ide u $(\varphi,\ xH_1\mapsto\varphi(x)H_2)$; dobro definirano jer iz $x^{-1}y\in H_1$ slijedi $\varphi(x)^{-1}\varphi(y)\in H_2$.'
 functorial: true
+region: strukture
 teaches: [action-on-cosets]
 requires: []
 depends: [obj-subgroup, def-coset, obj-group-action]

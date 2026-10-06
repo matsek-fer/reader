@@ -4,6 +4,8 @@ taxon: object
 title: "Djelovanje monoida na skupu"
 symbol: '(M, X, \rho)'
 hom: 'Par $(\varphi,f)$: $\varphi\colon M\to N$ homomorfizam monoida (čuva produkt i jedinicu), $f\colon X\to Y$, uz $f(m\cdot x)=\varphi(m)\cdot f(x)$.'
+region: strukture
+pos: [640, 140]
 teaches: []
 requires: []
 depends: [def-group, obj-group-action]

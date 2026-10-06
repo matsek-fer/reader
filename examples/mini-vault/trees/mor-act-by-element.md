@@ -3,15 +3,16 @@ id: mor-act-by-element
 taxon: morphism
 title: "Djelovanje jednog elementa"
 kind: hom
-from: obj-set
-to: obj-set
+from: obj-acted-set
+to: obj-acted-set
 statement: 'x\mapsto g\cdot x'
 label: 'g\cdot'
 needs: ['djelovanje grupe $G$ na skupu $X$', 'element $g\in G$']
 invertible: true
+region: primjeri
 teaches: [group-actions]
 requires: [cyclic-groups]
-depends: [obj-set, def-group-action]
+depends: [obj-acted-set, def-group-action]
 standalone: true
 language: hr
 origin: agent
@@ -19,7 +20,7 @@ origin: agent
 
 Kad grupa $G$ djeluje na skupu $X$ ([[def-group-action]]), svaki pojedini
 element $g\in G$ daje funkciju $X\to X$, $x\mapsto g\cdot x$: strelicu iz skupa
-u taj isti skup, dakle petlju na objektu [[obj-set]]. Ta je funkcija bijekcija,
+u taj isti skup, dakle petlju na instanci [[obj-acted-set]]. Ta je funkcija bijekcija,
 a inverz joj je $x\mapsto g^{-1}\cdot x$, jer je po aksiomima djelovanja
 $g^{-1}\cdot(g\cdot x)=(g^{-1}g)\cdot x=e\cdot x=x$ i jednako
 $g\cdot(g^{-1}\cdot x)=x$.
@@ -27,7 +28,8 @@ $g\cdot(g^{-1}\cdot x)=x$.
 Oprez: ta funkcija općenito **nije ekvivarijantna**. Da bi bila, trebalo bi
 $g\cdot(h\cdot x)=h\cdot(g\cdot x)$ za sve $h$ i $x$, a to vrijedi tek kad $gh$
 i $hg$ djeluju jednako na svaku točku — primjerice kad je $g$ u centru grupe.
-Zato petlja stoji na skupu ([[obj-set]]), a ne na djelovanju.
+Zato petlja stoji na skupu ([[obj-acted-set]], instanca vrste [[obj-set]]), a
+ne na djelovanju.
 
 Petlja se može primjenjivati uzastopce, pa je korisno odmotati je u lanac
 ([[exp-petlja-kao-lanac]]). Krenuvši iz točke $x$, lanac redom posjećuje

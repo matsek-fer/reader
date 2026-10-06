@@ -4,6 +4,8 @@ taxon: object
 title: "Prirodni broj"
 symbol: 'n \in \mathbb{N}'
 hom: 'Jedina strelica $m\to n$ jest nejednakost $m\le n$: prirodni brojevi su uređen skup, pa dva broja povezuje najviše jedna strelica.'
+region: strukture
+pos: [0, 140]
 teaches: []
 requires: []
 depends: []

@@ -185,7 +185,7 @@
       "group": "4 · Primjer i veza",
       "standalone": true,
       "offset": 3840,
-      "scale": 0.0010410228
+      "scale": 0.00092266471
     },
     {
       "id": "mor-act-by-element",
@@ -198,13 +198,13 @@
         "cyclic-groups"
       ],
       "depends": [
-        "obj-set",
+        "obj-acted-set",
         "def-group-action"
       ],
       "group": "Struktura",
       "standalone": true,
       "offset": 4224,
-      "scale": 0.00096504285
+      "scale": 0.00088916343
     },
     {
       "id": "mor-action-group",
@@ -220,7 +220,7 @@
       "group": "Struktura",
       "standalone": true,
       "offset": 4608,
-      "scale": 0.00088079233
+      "scale": 0.00090573036
     },
     {
       "id": "mor-action-set",
@@ -303,13 +303,13 @@
       ],
       "requires": [],
       "depends": [
-        "obj-group-action",
+        "obj-group-action-source",
         "obj-group-action-target"
       ],
       "group": "Struktura",
       "standalone": true,
       "offset": 6528,
-      "scale": 0.00094558739
+      "scale": 0.0010557381
     },
     {
       "id": "mor-fixed-points",
@@ -347,6 +347,22 @@
       "scale": 0.00096561349
     },
     {
+      "id": "mor-inclusion",
+      "taxon": "morphism",
+      "title": "Inkluzija podgrupe",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-subgroup-as-group",
+        "obj-ambient-group",
+        "def-subgroup"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 7680,
+      "scale": 0.00094107585
+    },
+    {
       "id": "mor-monoid-action",
       "taxon": "morphism",
       "title": "Djelovanje grupe kao djelovanje monoida",
@@ -358,26 +374,8 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 7680,
-      "scale": 0.00097126743
-    },
-    {
-      "id": "mor-ogrlice-z6",
-      "taxon": "morphism",
-      "title": "Rotacije ogrlice od šest perli",
-      "teaches": [
-        "group-actions"
-      ],
-      "requires": [
-        "cyclic-groups"
-      ],
-      "depends": [
-        "obj-group-action"
-      ],
-      "group": "Struktura",
-      "standalone": true,
       "offset": 8064,
-      "scale": 0.00093749523
+      "scale": 0.00097126743
     },
     {
       "id": "mor-orbit-count",
@@ -393,7 +391,7 @@
       "group": "Struktura",
       "standalone": true,
       "offset": 8448,
-      "scale": 0.00096841925
+      "scale": 0.00096217384
     },
     {
       "id": "mor-orbits",
@@ -410,7 +408,25 @@
       "group": "Struktura",
       "standalone": true,
       "offset": 8832,
-      "scale": 0.00099049462
+      "scale": 0.00096428606
+    },
+    {
+      "id": "mor-rho",
+      "taxon": "morphism",
+      "title": "Pravilo djelovanja",
+      "teaches": [],
+      "requires": [
+        "functions"
+      ],
+      "depends": [
+        "obj-acting-group",
+        "obj-acted-set",
+        "def-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 9216,
+      "scale": 0.0011112387
     },
     {
       "id": "mor-stabilizer",
@@ -428,7 +444,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 9216,
+      "offset": 9600,
       "scale": 0.0010166418
     },
     {
@@ -448,8 +464,50 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 9600,
+      "offset": 9984,
       "scale": 0.0010323257
+    },
+    {
+      "id": "obj-acted-set",
+      "taxon": "object",
+      "title": "Skup na kojem se djeluje",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-set"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 10368,
+      "scale": 0.0009650801
+    },
+    {
+      "id": "obj-acting-group",
+      "taxon": "object",
+      "title": "Grupa koja djeluje",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-group"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 10752,
+      "scale": 0.0010076408
+    },
+    {
+      "id": "obj-ambient-group",
+      "taxon": "object",
+      "title": "Okolna grupa",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-group"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 11136,
+      "scale": 0.0011561313
     },
     {
       "id": "obj-g-sets",
@@ -465,8 +523,8 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 9984,
-      "scale": 0.0010973325
+      "offset": 11520,
+      "scale": 0.0010823352
     },
     {
       "id": "obj-group",
@@ -481,7 +539,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 10368,
+      "offset": 11904,
       "scale": 0.00095759649
     },
     {
@@ -497,12 +555,29 @@
       "depends": [
         "def-group-action",
         "obj-group",
-        "obj-set"
+        "obj-set",
+        "obj-acting-group",
+        "obj-acted-set",
+        "mor-rho"
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 10752,
-      "scale": 0.00094148452
+      "offset": 12288,
+      "scale": 0.00095152251
+    },
+    {
+      "id": "obj-group-action-source",
+      "taxon": "object",
+      "title": "Djelovanje na skupu X",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 12672,
+      "scale": 0.00089411068
     },
     {
       "id": "obj-group-action-target",
@@ -515,8 +590,8 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 11136,
-      "scale": 0.0010430122
+      "offset": 13056,
+      "scale": 0.0010104687
     },
     {
       "id": "obj-monoid-action",
@@ -530,7 +605,7 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 11520,
+      "offset": 13440,
       "scale": 0.0009596911
     },
     {
@@ -542,8 +617,26 @@
       "depends": [],
       "group": "Struktura",
       "standalone": true,
-      "offset": 11904,
+      "offset": 13824,
       "scale": 0.0010842972
+    },
+    {
+      "id": "obj-ogrlice-z6",
+      "taxon": "object",
+      "title": "Rotacije ogrlice od šest perli",
+      "teaches": [
+        "group-actions"
+      ],
+      "requires": [
+        "cyclic-groups"
+      ],
+      "depends": [
+        "obj-group-action"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 14208,
+      "scale": 0.00092469637
     },
     {
       "id": "obj-perm-rep",
@@ -562,8 +655,23 @@
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 12288,
-      "scale": 0.00097873543
+      "offset": 14592,
+      "scale": 0.00096652469
+    },
+    {
+      "id": "obj-podgrupa-z6",
+      "taxon": "object",
+      "title": "Podgrupa $\\{0,3\\}$ u $\\mathbb{Z}_6$",
+      "teaches": [],
+      "requires": [],
+      "depends": [
+        "obj-subgroup",
+        "exm-koseti-u-z6"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 14976,
+      "scale": 0.0010377169
     },
     {
       "id": "obj-set",
@@ -576,8 +684,8 @@
       "depends": [],
       "group": "Struktura",
       "standalone": true,
-      "offset": 12672,
-      "scale": 0.0008742161
+      "offset": 15360,
+      "scale": 0.00089333265
     },
     {
       "id": "obj-subgroup",
@@ -589,12 +697,29 @@
       "requires": [],
       "depends": [
         "def-subgroup",
+        "obj-group",
+        "obj-subgroup-as-group",
+        "obj-ambient-group",
+        "mor-inclusion"
+      ],
+      "group": "Struktura",
+      "standalone": true,
+      "offset": 15744,
+      "scale": 0.00099279514
+    },
+    {
+      "id": "obj-subgroup-as-group",
+      "taxon": "object",
+      "title": "Podgrupa kao grupa za sebe",
+      "teaches": [],
+      "requires": [],
+      "depends": [
         "obj-group"
       ],
       "group": "Struktura",
       "standalone": true,
-      "offset": 13056,
-      "scale": 0.00097474168
+      "offset": 16128,
+      "scale": 0.00096108236
     },
     {
       "id": "prf-burnside",
@@ -609,7 +734,7 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 13440,
+      "offset": 16512,
       "scale": 0.00090684818
     },
     {
@@ -625,7 +750,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 13824,
+      "offset": 16896,
       "scale": 0.0010252977
     },
     {
@@ -640,7 +765,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 14208,
+      "offset": 17280,
       "scale": 0.0010188112
     },
     {
@@ -656,7 +781,7 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 14592,
+      "offset": 17664,
       "scale": 0.00088023911
     },
     {
@@ -674,8 +799,8 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 14976,
-      "scale": 0.00094452788
+      "offset": 18048,
+      "scale": 0.00092812105
     },
     {
       "id": "thm-lagrange",
@@ -691,7 +816,7 @@
       ],
       "group": "2 · Teorem i dokazi",
       "standalone": true,
-      "offset": 15360,
+      "offset": 18432,
       "scale": 0.001023773
     },
     {
@@ -709,8 +834,8 @@
       ],
       "group": "3 · Djelovanja: drugi motor",
       "standalone": true,
-      "offset": 15744,
-      "scale": 0.0010125154
+      "offset": 18816,
+      "scale": 0.0010178361
     }
   ]
 }

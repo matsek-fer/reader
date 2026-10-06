@@ -35,13 +35,13 @@ uče nove koncepte pa stoje uz svoje teoreme.
 - [[con-ekvivarijantna-preslikavanja]] (connection)
 - [[obj-group-action]] (object)
 - [[obj-perm-rep]] (object)
+- [[obj-ogrlice-z6]] (object)
 - [[mor-act-by-element]] (morphism)
 - [[mor-action-group]] (morphism)
 - [[mor-action-set]] (morphism)
 - [[mor-cayley]] (morphism)
 - [[mor-curry]] (morphism)
 - [[mor-equivariant-map]] (morphism)
-- [[mor-ogrlice-z6]] (morphism)
 - [[mor-uncurry]] (morphism)
 
 ## orbits-stabilizers

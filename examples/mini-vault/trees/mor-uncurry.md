@@ -12,6 +12,7 @@ needs: []
 on_homomorphisms: '$(\varphi,f)\mapsto(\varphi,f)$: uvjet $f\circ\hat\rho(g)=\hat\sigma(\varphi(g))\circ f$, primijenjen na točku $x$, jest $f(g\cdot x)=\varphi(g)\cdot f(x)$.'
 functorial: true
 inverse: mor-curry
+region: strukture
 teaches: [group-actions]
 requires: [permutation-groups, group-homomorphisms]
 depends: [obj-perm-rep, obj-group-action]

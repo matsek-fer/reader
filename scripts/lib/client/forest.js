@@ -321,6 +321,8 @@
     panel.classList.remove('open');
   });
   panelBody.addEventListener('click', function (ev) {
+    var f = ev.target.closest('button[data-focus]');
+    if (f) { setTab('structure'); focusDefinition(f.getAttribute('data-focus')); return; }
     var a = ev.target.closest('a[data-open]');
     if (a) { ev.preventDefault(); openPanel(a.getAttribute('data-open')); }
   });
@@ -440,6 +442,8 @@
     slayer.style.display = st ? '' : 'none';
     slabels.style.visibility = st ? 'visible' : 'hidden';
     document.body.classList.toggle('tab-structure', st);
+    if (!st) { unfocus(); if (lbar) lbar.hidden = true; }
+    else if (lbar && dirty) lbar.hidden = false;
     tabsEl.querySelectorAll('.tab').forEach(function (b) {
       b.classList.toggle('on', b.getAttribute('data-tab') === name);
     });
@@ -451,20 +455,55 @@
 
   // sTop is how far a loop on a top-row box, and its label, reach over the
   // top of the layout.
+  //
+  // A canvas of several regions does not open fitted. At the zoom that holds
+  // seven frames on one screen a box title renders at four pixels and the
+  // picture is shapes and nothing else, so the fit has a floor — READ_K, the
+  // zoom at which a title is still a word. When the whole canvas will not go
+  // that large, the view opens on the first region and the reader pans to the
+  // rest, which is what regions are for.
+  // The floor is for the two-level canvas, which is a plane of regions; a 0.2
+  // canvas is one column of boxes and still opens fitted, as it always has.
+  var READ_K = 0.75;
   function fitStructure() {
     var r = svg.getBoundingClientRect();
-    var k = Math.min(1.2, (r.width - 40) / (S.size.w + 40), (r.height - topbarH - 120) / (S.size.h - sTop + 40));
-    views.structure.k = Math.max(0.2, k);
+    var aw = r.width - 40, ah = r.height - topbarH - 120;
+    var k = Math.min(1.2, aw / (S.size.w + 40), ah / (S.size.h - sTop + 40));
+    var floor = S.twoLevel ? READ_K : 0.2;
+    var first = S.twoLevel && (S.regions || [])[0];
+    if (k < floor && first) {
+      k = Math.max(floor, Math.min(1.2, aw / (first.w + 40), ah / (first.h + 40)));
+      views.structure.k = k;
+      views.structure.x = 20 - first.x * k;
+      views.structure.y = topbarH + 20 - Math.min(first.y, sTop) * k;
+      return;
+    }
+    views.structure.k = Math.max(floor, k);
     views.structure.x = 20;
     views.structure.y = topbarH + 20 - sTop * views.structure.k;
   }
 
   function boxOf(id) {
     var p = S.pos[id];
+    if (S.twoLevel) { var o = objById[id]; return { x: p.x, y: p.y, w: o.w, h: o.h }; }
     var n = (S.instances[id] || []).length;
     return { x: p.x, y: p.y, w: G.NODE_W, h: G.NODE_H + n * (S.geom.INST_H + S.geom.INST_GAP) };
   }
   function unit(x, y) { var l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
+  // Where a ray from inside a box leaves it: the nearer of the two sides it
+  // can cross.
+  function exitPoint(b, from, to) {
+    var dx = to[0] - from[0], dy = to[1] - from[1], t = 1, s;
+    if (dx) { s = ((dx > 0 ? b.x + b.w : b.x) - from[0]) / dx; if (s >= 0) t = Math.min(t, s); }
+    if (dy) { s = ((dy > 0 ? b.y + b.h : b.y) - from[1]) / dy; if (s >= 0) t = Math.min(t, s); }
+    return [from[0] + dx * t, from[1] + dy * t];
+  }
+  // A straight run, written as a cubic whose controls sit on the line, so the
+  // label placement samples and measures it like any other edge.
+  function straight(p, q) {
+    return [p, [p[0] + (q[0] - p[0]) / 3, p[1] + (q[1] - p[1]) / 3],
+      [p[0] + 2 * (q[0] - p[0]) / 3, p[1] + 2 * (q[1] - p[1]) / 3], q];
+  }
   // An edge is a chain of cubic segments, each [p, c1, c2, q]: one for a
   // direct edge, three when it detours under a box that stands in its way.
   function cubicAt(g, t) {
@@ -509,6 +548,36 @@
         e.segs = [[e.p0, [xr + LOOP_FLARE, cy], [xl - LOOP_FLARE, cy], e.p2]];
       });
     });
+    // On a two-level canvas every arrow is straight, border to border. Two
+    // arrows between one pair of boxes step aside by a small offset; nothing
+    // bends, because placement is what keeps an arrow clear of a third box and
+    // a curve would only hide a layout that failed.
+    if (S.twoLevel) {
+      var pairs = {};
+      list.forEach(function (e) {
+        if (e.loop) return;
+        var k = e.from < e.to ? e.from + '|' + e.to : e.to + '|' + e.from;
+        (pairs[k] = pairs[k] || []).push(e);
+      });
+      Object.keys(pairs).sort().forEach(function (k) {
+        var g = pairs[k];
+        g.forEach(function (e, n) {
+          var A = boxOf(e.from), B = boxOf(e.to);
+          var ca = [A.x + A.w / 2, A.y + A.h / 2], cb = [B.x + B.w / 2, B.y + B.h / 2];
+          var u = unit(cb[0] - ca[0], cb[1] - ca[1]);
+          // The offset has to keep both ends inside their boxes, so the
+          // shallowest box in the pair caps it.
+          var lim = Math.max(0, Math.min(A.w, B.w, A.h, B.h) / 2 - 9);
+          var off = Math.max(-lim, Math.min(lim, (n - (g.length - 1) / 2) * 15));
+          var p = [ca[0] - u[1] * off, ca[1] + u[0] * off];
+          var q = [cb[0] - u[1] * off, cb[1] + u[0] * off];
+          e.p0 = exitPoint(A, p, q);
+          e.p2 = exitPoint(B, q, p);
+          e.segs = [straight(e.p0, e.p2)];
+        });
+      });
+      return list;
+    }
     var sides = {};
     function side(id, s) { var k = id + '|' + s; return sides[k] || (sides[k] = []); }
     list.forEach(function (e, i) {
@@ -608,11 +677,87 @@
     });
     S.objects.forEach(function (o) {
       var p = S.pos[o.id];
-      lh += '<span class="ssym" data-id="' + escText(o.id) + '" style="left:' + (p.x + 10) + 'px;top:' + (p.y + 24) + 'px">' + o.symbol_html + '</span>';
+      var dy = o.level === 'instance' ? 20 : 24;
+      lh += '<span class="ssym" data-id="' + escText(o.id) + '" style="left:' + (p.x + 10) + 'px;top:' + (p.y + dy) + 'px">' + o.symbol_html + '</span>';
     });
     document.getElementById('sedges').innerHTML = eh;
     slabels.innerHTML = lh;
+    if (S.twoLevel) { drawTies(); drawRegions(); }
     fitSymbols();
+  }
+
+  // An instance's tie to its kind: no head and no label, only the thin line
+  // that says which structure this box is one of. A tie that would run across
+  // half the canvas says it in words instead — a stub out of the instance
+  // carrying the kind's name — because a thin dashed line that long is read as
+  // crossing everything between, or at low zoom not read at all, and either way
+  // the one thing the reader wants from it is the name at this end.
+  var TIE_FAR = 420, TIE_STUB = 54;
+  function drawTies() {
+    var h = '';
+    S.objects.forEach(function (o) {
+      if (o.level !== 'instance' || !S.pos[o.of]) return;
+      var A = boxOf(o.id), B = boxOf(o.of);
+      var ca = [A.x + A.w / 2, A.y + A.h / 2], cb = [B.x + B.w / 2, B.y + B.h / 2];
+      var p = exitPoint(A, ca, cb), q = exitPoint(B, cb, ca);
+      var far = Math.hypot(q[0] - p[0], q[1] - p[1]) > TIE_FAR;
+      if (far) {
+        var u = unit(q[0] - p[0], q[1] - p[1]);
+        q = [p[0] + u[0] * TIE_STUB, p[1] + u[1] * TIE_STUB];
+      }
+      h += '<line class="stie' + (far ? ' far' : '') + '" data-of="' + escText(o.of) + '" x1="' + r1(p[0]) + '" y1="' + r1(p[1]) +
+        '" x2="' + r1(q[0]) + '" y2="' + r1(q[1]) + '"/>';
+      if (far) {
+        var name = objTitle(o.of);
+        if (name.length > 26) name = name.slice(0, 25) + '…';
+        var tw = name.length * 5.8, th = 11, end = u[0] < 0 ? -1 : 1;
+        // The name goes at the far end of the stub, or nearer, or above or
+        // below it — wherever it does not land on somebody else's box.
+        var spots = [];
+        // Nearest the instance first: the name says what THIS box is an
+        // instance of, so adrift at the stub's far end it reads as stray text.
+        [0.1, 0.4, 0.7, 1].forEach(function (t) {
+          var m = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+          [3, -11, 17, -22, 28].forEach(function (dy) { spots.push([m[0] + end * 4, m[1] + dy]); });
+        });
+        var at = spots[0];
+        for (var si = 0; si < spots.length; si++) {
+          var r = { x: end > 0 ? spots[si][0] : spots[si][0] - tw, y: spots[si][1] - th, w: tw, h: th + 3 };
+          var clear = S.objects.every(function (z) {
+            var b = boxOf(z.id);
+            return r.x > b.x + b.w || b.x > r.x + r.w || r.y > b.y + b.h || b.y > r.y + r.h;
+          });
+          if (clear) { at = spots[si]; break; }
+        }
+        h += '<text class="stie-name" data-of="' + escText(o.of) + '" x="' + r1(at[0]) +
+          '" y="' + r1(at[1]) + '" text-anchor="' + (end < 0 ? 'end' : 'start') + '">' + escText(name) + '</text>';
+      }
+    });
+    document.getElementById('sties').innerHTML = h;
+  }
+
+  // A region's frame is its boxes' bounding box plus the margin and the title
+  // strip, recomputed here so a dragged box takes its area with it.
+  function drawRegions() {
+    (S.regions || []).forEach(function (r) {
+      var g = document.querySelector('#sregions .sregion[data-region="' + r.id + '"]');
+      if (!g) return;
+      var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity, n = 0;
+      S.objects.forEach(function (o) {
+        if ((o.region || '') !== r.id) return;
+        var b = boxOf(o.id);
+        x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y);
+        x2 = Math.max(x2, b.x + b.w); y2 = Math.max(y2, b.y + b.h);
+        n++;
+      });
+      if (!n) return;
+      var pad = S.reg.pad, th = S.reg.title_h;
+      var box = g.querySelector('rect'), txt = g.querySelector('text');
+      box.setAttribute('x', r1(x1 - pad)); box.setAttribute('y', r1(y1 - pad - th));
+      box.setAttribute('width', r1(x2 - x1 + 2 * pad));
+      box.setAttribute('height', r1(y2 - y1 + 2 * pad + th));
+      txt.setAttribute('x', r1(x1 - pad + 16)); txt.setAttribute('y', r1(y1 - pad - th + 20));
+    });
   }
 
   // A symbol is the author's mathematics, so none of it is dropped: one too
@@ -656,11 +801,16 @@
     var pref = [0.5, 0.36, 0.64][e.slot % 3];
     var ts = LABEL_T.slice().sort(function (a, b) { return Math.abs(a - pref) - Math.abs(b - pref); });
     var spots = ts.map(function (t) { return bez(e, t); });
-    ts.forEach(function (t) {
-      var m = bez(e, t), tg = tangent(e, t);
-      [1, -1].forEach(function (side) {
-        var d = side * (h / 2 + 3);
-        spots.push([m[0] - tg[1] * d, m[1] + tg[0] * d]);
+    // Beside the line, then further beside it: a label whose cheapest spot on
+    // the line still costs box area has somewhere to go, because an arrow with
+    // a box close on both sides offers no free spot within one half-height.
+    [1, 2.1, 3.4].forEach(function (ring) {
+      ts.forEach(function (t) {
+        var m = bez(e, t), tg = tangent(e, t);
+        [1, -1].forEach(function (side) {
+          var d = side * ring * (h / 2 + 3);
+          spots.push([m[0] - tg[1] * d, m[1] + tg[0] * d]);
+        });
       });
     });
     return spots;
@@ -716,6 +866,186 @@
     });
   }
 
+  // --- editing the layout --------------------------------------------------
+  // Panning belongs to the empty background, so a box is free to carry the
+  // drag: press one and travel more than a few pixels and it moves; press and
+  // let go without travelling and it is the click that opens the tree. The
+  // picture is live — arrows, ties and region frames follow the box — and the
+  // arrangement is only written to the vault when the author says so.
+  var DRAG_SLOP = 4;
+  var basePos = null, drag = null, dragged = false, raf = null, dirty = false;
+  function snapshot() {
+    var out = {};
+    Object.keys(S.pos).forEach(function (id) { out[id] = { x: S.pos[id].x, y: S.pos[id].y }; });
+    return out;
+  }
+  function scheduleRedraw() {
+    if (raf) return;
+    raf = requestAnimationFrame(function () { raf = null; drawStructure(); });
+  }
+  if (S && S.twoLevel) {
+    slayer.addEventListener('mousedown', function (ev) {
+      if (ev.button !== 0 || defFocus.on) return;
+      var box = ev.target.closest('.sbox');
+      if (!box) return;
+      ev.preventDefault();
+      var id = box.getAttribute('data-box');
+      drag = { id: id, el: box, cx: ev.clientX, cy: ev.clientY, x0: S.pos[id].x, y0: S.pos[id].y, live: false };
+    });
+    window.addEventListener('mousemove', function (ev) {
+      if (!drag) return;
+      if (!drag.live && Math.abs(ev.clientX - drag.cx) + Math.abs(ev.clientY - drag.cy) < DRAG_SLOP) return;
+      drag.live = true;
+      var p = S.pos[drag.id];
+      p.x = Math.round(drag.x0 + (ev.clientX - drag.cx) / view.k);
+      p.y = Math.round(drag.y0 + (ev.clientY - drag.cy) / view.k);
+      drag.el.setAttribute('transform', 'translate(' + p.x + ',' + p.y + ')');
+      scheduleRedraw();
+    });
+    window.addEventListener('mouseup', function () {
+      if (!drag) return;
+      if (drag.live) { dragged = true; dirty = true; drawStructure(); placeLabels(); showLayoutBar(); }
+      drag = null;
+    });
+  }
+
+  // The whole arrangement is saved, not only the boxes that moved: the file is
+  // the picture the author sees, and a box left to the algorithm would drift
+  // the next time a neighbour changes. Positions go back in the coordinates
+  // `pos` is written in — each box's own region.
+  function regionOrigin(id) {
+    var rs = S.regions || [];
+    for (var i = 0; i < rs.length; i++) if (rs[i].id === (id || '')) return rs[i].origin;
+    return [0, 0];
+  }
+  function layoutPos() {
+    var out = {};
+    S.objects.slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; }).forEach(function (o) {
+      var org = regionOrigin(o.region);
+      out[o.id] = [Math.round(S.pos[o.id].x - org[0]), Math.round(S.pos[o.id].y - org[1])];
+    });
+    return out;
+  }
+  function layoutJson() { return JSON.stringify({ pos: layoutPos() }, null, 2) + '\n'; }
+  var lbar = document.getElementById('layoutbar');
+  function showLayoutBar(msg, err) {
+    if (!lbar) return;
+    lbar.hidden = false;
+    lbar.style.top = (topbarH + 12) + 'px';
+    lbar.classList.toggle('err', !!err);
+    var save = document.getElementById('lb-save');
+    save.hidden = !BRIDGE.on;
+    document.getElementById('lb-msg').textContent = msg || (BRIDGE.on
+      ? 'Razmještaj je promijenjen — spremi ga u ' + S.layoutFile + ' da preživi ponovnu izgradnju.'
+      : 'Razmještaj je promijenjen. Stranica otvorena s diska ne može pisati u trezor — kopiraj ili preuzmi i spremi kao ' + S.layoutFile + ' u korijen trezora.');
+    var json = document.getElementById('lb-json');
+    json.value = layoutJson();
+    document.getElementById('lb-dl').href =
+      'data:application/json;charset=utf-8,' + encodeURIComponent(json.value);
+  }
+  if (lbar) {
+    lbar.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button, a');
+      if (!b) return;
+      if (b.id === 'lb-save') {
+        b.disabled = true;
+        api('/api/layout', { method: 'POST', body: { pos: layoutPos() } }).then(function (r) {
+          b.disabled = false;
+          if (r.error) throw new Error(r.error);
+          dirty = false;
+          showLayoutBar('Spremljeno u ' + S.layoutFile + ' (' + r.count + ' kutija) — ponovna izgradnja čuva ovaj razmještaj.');
+        }).catch(function (e) { b.disabled = false; showLayoutBar('Spremanje nije uspjelo: ' + e.message, true); });
+      } else if (b.id === 'lb-copy') {
+        var text = layoutJson();
+        var done = function (ok) { b.textContent = ok ? 'Kopirano ✓' : 'Kopiranje nije uspjelo'; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(legacyCopy(text)); });
+        } else { done(legacyCopy(text)); }
+        document.getElementById('lb-json').hidden = false;
+      } else if (b.id === 'lb-undo') {
+        Object.keys(basePos).forEach(function (id) {
+          S.pos[id] = { x: basePos[id].x, y: basePos[id].y };
+        });
+        S.objects.forEach(function (o) {
+          var el = document.querySelector('#slayer .sbox[data-box="' + o.id + '"]');
+          if (el) el.setAttribute('transform', 'translate(' + S.pos[o.id].x + ',' + S.pos[o.id].y + ')');
+        });
+        dirty = false;
+        drawStructure(); placeLabels();
+        lbar.hidden = true;
+      }
+    });
+  }
+  window.addEventListener('beforeunload', function (ev) {
+    if (!dirty) return;
+    ev.preventDefault();
+    ev.returnValue = '';
+  });
+
+  // --- one level lower: a kind's defining diagram on the canvas ------------
+  // The panel already typesets the diagram; this shows it in place, with the
+  // rest of the canvas out of the way and one way back.
+  var defFocus = { on: false, view: null };
+  function focusDefinition(id) {
+    var o = objById[id];
+    if (!o || !o.data || !o.data.length) return;
+    var keep = {}, arrows = {};
+    keep[id] = true;
+    o.data.forEach(function (x) {
+      var a = arrowById[x];
+      if (a) { arrows[x] = true; keep[a.from] = true; keep[a.to] = true; } else keep[x] = true;
+    });
+    if (!defFocus.on) defFocus.view = { x: view.x, y: view.y, k: view.k };
+    defFocus.on = true;
+    document.body.classList.add('sfocus');
+    document.querySelectorAll('#slayer .sbox').forEach(function (b) {
+      b.classList.toggle('off', !keep[b.getAttribute('data-box')]);
+    });
+    sedges.forEach(function (e, i) {
+      var g = document.querySelector('#sedges .sedge[data-id="' + e.ids[0] + '"]');
+      var on = e.ids.some(function (x) { return arrows[x]; });
+      if (g) g.classList.toggle('off', !on);
+      var l = slabels.querySelector('.slabel[data-i="' + i + '"]');
+      if (l) l.classList.toggle('off', !on);
+    });
+    slabels.querySelectorAll('.ssym').forEach(function (s) {
+      s.classList.toggle('off', !keep[s.getAttribute('data-id')]);
+    });
+    document.getElementById('sties').classList.add('off');
+    document.getElementById('sregions').classList.add('off');
+    var bar = document.getElementById('focusbar');
+    bar.hidden = false;
+    bar.style.top = (topbarH + 12) + 'px';
+    document.getElementById('fb-what').textContent = 'Definicija vrste: ' + objTitle(id);
+    // Fit the diagram: its boxes' bounding box, with room for the labels.
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    Object.keys(keep).forEach(function (k) {
+      if (!S.pos[k]) return;
+      var b = boxOf(k);
+      x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y);
+      x2 = Math.max(x2, b.x + b.w); y2 = Math.max(y2, b.y + b.h);
+    });
+    var r = svg.getBoundingClientRect(), m = 90;
+    view.k = Math.max(0.2, Math.min(1.6, (r.width - 2 * m) / (x2 - x1), (r.height - topbarH - 2 * m) / (y2 - y1)));
+    view.x = (r.width - (x2 - x1) * view.k) / 2 - x1 * view.k;
+    view.y = topbarH + (r.height - topbarH - (y2 - y1) * view.k) / 2 - y1 * view.k;
+    applyView();
+  }
+  function unfocus() {
+    if (!defFocus.on) return;
+    defFocus.on = false;
+    document.body.classList.remove('sfocus');
+    document.querySelectorAll('#slayer .off, #slabels .off').forEach(function (el) { el.classList.remove('off'); });
+    document.getElementById('focusbar').hidden = true;
+    if (defFocus.view) { view.x = defFocus.view.x; view.y = defFocus.view.y; view.k = defFocus.view.k; applyView(); }
+  }
+  if (document.getElementById('focusbar')) {
+    document.getElementById('fb-back').addEventListener('click', unfocus);
+  }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') unfocus();
+  });
+
   // --- the panel's cross-tree sections -------------------------------------
   function arrowRow(a, dir) {
     var other = dir === 'out' ? a.to : a.from;
@@ -745,8 +1075,10 @@
     order.sort(function (a, b) { return a === 'ostalo' ? 1 : b === 'ostalo' ? -1 : a.localeCompare(b, 'hr'); });
     return order.map(function (f) {
       return '<div class="sfield">' + escText(f) + '</div>' + byField[f].map(function (t) {
+        var via = t.via ? 'vrijedi preko poopćenja: ' + t.via
+          : t.ofKind ? 'teorem o vrsti: ' + t.ofKind : '';
         return '<a href="#" class="srow" data-open="' + escText(t.id) + '">' + escText(t.title) +
-          (t.via ? '<span class="srow-via">vrijedi preko poopćenja: ' + escText(t.via) + '</span>' : '') + '</a>';
+          (via ? '<span class="srow-via">' + escText(via) + '</span>' : '') + '</a>';
       }).join('');
     }).join('');
   }
@@ -762,8 +1094,42 @@
         '<dd>' + inst.values_html[k] + '</dd>';
     }).join('') + '</dl>';
   }
+  // An instance's page reads from its kind downwards: what the kind's arrows
+  // give on any structure of that sort (this one included), then the maps that
+  // start or end at this very structure, then the definitions it is part of.
+  function instanceSections(id, o) {
+    var kind = S.arrows.filter(function (a) { return a.from === o.of; });
+    var out = S.arrows.filter(function (a) { return a.from === id; });
+    var inn = S.arrows.filter(function (a) { return a.to === id && a.from !== id; });
+    var h = '<h3 class="ssec">Strelice vrste ' + escText(objTitle(o.of)) + ' (' + kind.length + ')</h3>' +
+      (kind.length
+        ? '<p class="smuted">Vrijede za svaku strukturu te vrste, pa i za ovu.</p>' + kindGroups(kind, 'out')
+        : '<p class="smuted">Vrsta nema svojih strelica.</p>');
+    h += '<h3 class="ssec">Preslikavanja iz ovog primjera (' + out.length + ')</h3>' +
+      (out.length ? kindGroups(out, 'out') : '<p class="smuted">Nema preslikavanja iz ovog primjera.</p>');
+    if (inn.length) {
+      h += '<h3 class="ssec">Preslikavanja u ovaj primjer (' + inn.length + ')</h3>' + kindGroups(inn, 'in');
+    }
+    var defines = S.objects.filter(function (x) { return x.data && x.data.indexOf(id) >= 0; });
+    if (defines.length) {
+      h += '<h3 class="ssec">Sudjeluje u definiciji (' + defines.length + ')</h3>' +
+        defines.map(function (x) {
+          return '<a href="#" class="srow" data-open="' + escText(x.id) + '">' + escText(x.title) + '</a>';
+        }).join('');
+    }
+    var thms = (S.theorems[id] || []).slice();
+    (S.theorems[o.of] || []).forEach(function (t) {
+      thms.push({ id: t.id, title: t.title, fields: t.fields, ofKind: objTitle(o.of) });
+    });
+    h += '<h3 class="ssec">Teoremi (' + countUnique(thms) + ')</h3>' +
+      (thms.length ? theoremGroups(thms) : '<p class="smuted">Nijedan teorem ne govori o ovom primjeru.</p>');
+    return h;
+  }
   function structureSections(id) {
     var h = '';
+    if (objById[id] && S.twoLevel && objById[id].level === 'instance') {
+      return instanceSections(id, objById[id]);
+    }
     if (objById[id]) {
       var out = S.arrows.filter(function (a) { return a.from === id && a.kind !== 'instance'; });
       var inn = S.arrows.filter(function (a) { return a.to === id && a.kind !== 'instance'; });
@@ -823,6 +1189,7 @@
     S.kinds.forEach(function (k) { KIND_COLOR[k.id] = k.color; KIND_HR[k.id] = k.hr; });
     S.objects.forEach(function (o) { objById[o.id] = o; });
     S.arrows.forEach(function (a) { arrowById[a.id] = a; });
+    basePos = snapshot();
     drawStructure();
     placeLabels();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeLabels);
@@ -831,6 +1198,7 @@
       if (b) setTab(b.getAttribute('data-tab'));
     });
     slayer.addEventListener('click', function (ev) {
+      if (dragged) { dragged = false; return; }
       var n = ev.target.closest('.node, .inst, .sedge');
       if (n) openPanel(n.getAttribute('data-id'));
     });

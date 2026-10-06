@@ -11,6 +11,7 @@ acts_on: all
 needs: ['$X$ konačan']
 on_homomorphisms: 'Ekvivarijantno $f\colon X\to Y$ inducira $X/G\to Y/G$, surjektivno kad je $f$ surjektivno i injektivno kad je $f$ injektivno; općenito ne čuva ni $\le$ ni $\ge$, pa brojanje nije funktor.'
 functorial: false
+region: strukture
 teaches: [orbits-stabilizers]
 requires: []
 depends: [mor-orbits]
@@ -27,4 +28,4 @@ djelovanja mogu dati isti broj.
 Računa se bez popisivanja orbita, prebrojavanjem fiksnih točaka pojedinih
 elemenata — Burnsideova lema [[thm-burnside]]:
 $|X/G|=\frac1{|G|}\sum_{g\in G}|\mathrm{Fix}(g)|$ kad je i $G$ konačna. Za
-ogrlice od šest perli u dvije boje izlazi $14$ ([[mor-ogrlice-z6]]).
+ogrlice od šest perli u dvije boje izlazi $14$ ([[obj-ogrlice-z6]]).

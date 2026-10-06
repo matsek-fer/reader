@@ -11,6 +11,7 @@ acts_on: all
 needs: []
 on_homomorphisms: '$(\varphi,f)\mapsto(\varphi,f)$: homomorfizam grupa čuva produkt i $e$, pa je i homomorfizam monoida.'
 functorial: true
+region: strukture
 teaches: []
 requires: []
 depends: [obj-group-action, obj-monoid-action]

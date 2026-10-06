@@ -26,5 +26,5 @@ $\mathrm{Fix}(g)$ je $X^{\langle g\rangle}$, skup fiksnih točaka
 $X^G=\bigcap_{g}\mathrm{Fix}(g)$ općenito mnogo manji od svakog pribrojnika.
 Dokaz dvostrukim prebrojavanjem parova $(g,x)$ s $g\cdot x=x$, uz
 [[thm-orbit-stabilizer]]: [[prf-burnside]]. Tipična primjena je brojanje
-ogrlica — $14$ ogrlica od šest perli u dvije boje ([[mor-ogrlice-z6]]). Lema
+ogrlica — $14$ ogrlica od šest perli u dvije boje ([[obj-ogrlice-z6]]). Lema
 nije Burnsideova (poznavali su je Cauchy i Frobenius), ali ime je ostalo.

@@ -4,6 +4,8 @@ taxon: object
 title: "Permutacijska reprezentacija"
 symbol: '\hat\rho\colon G\to\mathrm{Sym}(X)'
 hom: 'Par $(\varphi,f)$, $\varphi\colon G\to H$ homomorfizam i $f\colon X\to Y$, uz $f\circ\hat\rho(g)=\hat\sigma(\varphi(g))\circ f$ za svaki $g\in G$.'
+region: strukture
+pos: [640, 0]
 teaches: [group-actions]
 requires: [permutation-groups, group-homomorphisms]
 depends: [obj-group, obj-set]
@@ -34,7 +36,7 @@ podgrupi od $\mathrm{Sym}(X)$.
 ## Primjeri
 Cayleyjevo djelovanje daje vjernu reprezentaciju $G\hookrightarrow\mathrm{Sym}(G)$
 ([[mor-cayley]]); rotacije ogrlice daju $\mathbb{Z}_6\to\mathrm{Sym}(B^6)$
-([[mor-ogrlice-z6]]).
+([[obj-ogrlice-z6]]).
 
 ## Povezano
 Isti objekt u drugom ruhu: [[obj-group-action]].

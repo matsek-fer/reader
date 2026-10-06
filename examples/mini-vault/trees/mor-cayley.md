@@ -12,6 +12,7 @@ needs: []
 on_homomorphisms: '$\varphi\colon G\to H$ ide u par $(\varphi,\varphi)$: uvjet $\varphi(gx)=\varphi(g)\varphi(x)$ upravo je homomorfnost.'
 functorial: true
 generalized_by: [mor-coset-action]
+region: strukture
 teaches: [group-actions]
 requires: []
 depends: [obj-group, obj-group-action, def-group-action]

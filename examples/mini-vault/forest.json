@@ -1,5 +1,5 @@
 {
-  "schema_version": "forest-0.2",
+  "schema_version": "forest-0.3",
   "source": {
     "title": "Lagrangeov teorem — bilješke iz MatSek knjižnice",
     "authors": ["Relja Šegvić"],
@@ -11,5 +11,10 @@
   "created": "2026-09-07",
   "tool": "forest-digest",
   "tool_version": "0.1.0",
-  "derivative": false
+  "derivative": false,
+  "regions": [
+    { "id": "strukture", "title": "Vrste struktura" },
+    { "id": "definicije", "title": "Definicijski dijagrami" },
+    { "id": "primjeri", "title": "Instance i preslikavanja među njima" }
+  ]
 }

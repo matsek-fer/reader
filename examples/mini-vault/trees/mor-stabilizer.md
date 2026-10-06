@@ -11,6 +11,7 @@ acts_on: all
 needs: ['odabrana točka $x \in X$']
 on_homomorphisms: 'Uz $\varphi=\mathrm{id}$ i $f(x)=y$ vrijedi $G_x\subseteq G_y$, jer $g\cdot x=x$ povlači $g\cdot y=f(g\cdot x)=y$; ovisi o točki, pa nije funktor na golim djelovanjima.'
 functorial: false
+region: strukture
 teaches: [orbits-stabilizers]
 requires: [subgroups]
 depends: [obj-group-action, def-subgroup]

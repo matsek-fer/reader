@@ -38,15 +38,15 @@ strukturni graf: objekte (vrste struktura) i strelice među njima.
 
 ## Struktura
 
-Objekti strukturnog grafa — vrste struktura; strelice (`mor-`) stoje uz
-svoj izvorni objekt i ovdje se ne popisuju.
+Vrste struktura o kojima šuma govori. Instance tih vrsta (`instance_of`) i
+strelice (`mor-`) ovdje se ne popisuju: instanca stoji uz svoju vrstu,
+strelica uz svoj izvor.
 
 - [[obj-set]] — skup: odredište strelica koje zaboravljaju
 - [[obj-nat]] — prirodni broj: odredište svakog brojanja
 - [[obj-group]] — grupa; iz nje Cayleyjevo djelovanje na sebi
-- [[obj-subgroup]] — podgrupa kao par $H \le G$; iz nje djelovanje na kosetima
-- [[obj-group-action]] — djelovanje grupe na skupu $(G, X, \rho)$: središnji objekt, s orbitama, fiksnim točkama, stabilizatorom i ogrlicama
-- [[obj-group-action-target]] — drugo djelovanje iste grupe $(G, Y, \sigma)$: isti tip, da ekvivarijantno preslikavanje ima kamo stići
+- [[obj-subgroup]] — podgrupa $H \le G$: dijagram grupe, okolne grupe i inkluzije; iz nje djelovanje na kosetima
+- [[obj-group-action]] — djelovanje grupe na skupu $(G, X, \rho)$: središnja vrsta, zadana dijagramom grupe, skupa i pravila; s orbitama, fiksnim točkama, stabilizatorom i ogrlicama
 - [[obj-perm-rep]] — isti podaci kao homomorfizam $G \to \mathrm{Sym}(X)$
 - [[obj-monoid-action]] — poopćenje: djelovanje monoida, bez inverza
 - [[obj-g-sets]] — konstrukcija: kategorija $G$-skupova, u kojoj su orbite kolimes

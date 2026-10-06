@@ -30,4 +30,4 @@ nekom $G/H$ ([[con-ekvivarijantna-preslikavanja]]). Dokaz:
 [[prf-orbit-stabilizer]]. Geometrijski: orbita broji *koliko položaja* točka
 može zauzeti, stabilizator *koliko simetrija* je ostavlja na miru; produkt je
 uvijek red grupe. Posljedica za brojanje orbita: [[thm-burnside]]; na
-ogrlicama, [[mor-ogrlice-z6]].
+ogrlicama, [[obj-ogrlice-z6]].

@@ -12,6 +12,7 @@ needs: []
 on_homomorphisms: '$(\varphi,f)\mapsto(\varphi,f)$: isti par, jer uvjet $f(g\cdot x)=\varphi(g)\cdot f(x)$ glasi upravo $f\circ\hat\rho(g)=\hat\sigma(\varphi(g))\circ f$.'
 functorial: true
 inverse: mor-uncurry
+region: strukture
 teaches: [group-actions]
 requires: [permutation-groups, group-homomorphisms]
 depends: [obj-group-action, obj-perm-rep]

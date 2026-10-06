@@ -4,9 +4,12 @@ taxon: object
 title: "Djelovanje grupe na skupu"
 symbol: '(G, X, \rho)'
 hom: 'Par $(\varphi, f)$: $\varphi\colon G\to H$ homomorfizam, $f\colon X\to Y$, uz $f(g\cdot x)=\varphi(g)\cdot f(x)$; za $G=H$ i $\varphi=\mathrm{id}$ to su ekvivarijantna preslikavanja, i na njima se sudi je li strelica iz ovog objekta funktorijalna.'
+data: [obj-acting-group, obj-acted-set, mor-rho]
+region: strukture
+pos: [320, 0]
 teaches: [group-actions]
 requires: [functions]
-depends: [def-group-action, obj-group, obj-set]
+depends: [def-group-action, obj-group, obj-set, obj-acting-group, obj-acted-set, mor-rho]
 standalone: true
 language: hr
 origin: agent
@@ -23,9 +26,12 @@ $e\cdot x=x$ i $g\cdot(h\cdot x)=(gh)\cdot x$; točan iskaz je
 [[def-group-action]].
 
 ## Podaci
-Grupa $G$ ([[mor-action-group]]), skup $X$ ([[mor-action-set]]) i pravilo
-$\rho$. Isti podaci drugim riječima: homomorfizam
-$\hat\rho\colon G\to\mathrm{Sym}(X)$ ([[mor-curry]]).
+Vrsta je zadana dijagramom nad instancama drugih vrsta: jedna grupa
+[[obj-acting-group]], jedan skup [[obj-acted-set]] i pravilo [[mor-rho]]
+među njima. Ta tri stabla stoje u ključu `data` ovoga; strelice koje iz
+vrste *izlaze* na te podatke su [[mor-action-group]] i [[mor-action-set]].
+Isti podaci drugim riječima: homomorfizam $\hat\rho\colon G\to\mathrm{Sym}(X)$
+([[mor-curry]], [[obj-perm-rep]]).
 
 ## Svojstva
 Orbite particioniraju $X$ ([[mor-orbits]]); koliko ih je, [[mor-orbit-count]];
@@ -35,8 +41,11 @@ je podgrupa ([[mor-stabilizer]]) i $|Gx|\cdot|G_x|=|G|$
 [[con-ekvivarijantna-preslikavanja]].
 
 ## Primjeri
-Rotacije ogrlice ([[mor-ogrlice-z6]]); $G$ na sebi lijevim množenjem
-([[mor-cayley]]); $G$ na kosetima podgrupe ([[mor-coset-action]]).
+Rotacije ogrlice ([[obj-ogrlice-z6]]) imenovana su instanca, a
+[[obj-group-action-source]] i [[obj-group-action-target]] dvije bezimene,
+među kojima se crta [[mor-equivariant-map]]. Iz drugih vrsta dolaze $G$ na
+sebi lijevim množenjem ([[mor-cayley]]) i $G$ na kosetima podgrupe
+([[mor-coset-action]]).
 
 ## Povezano
 Poopćenje: [[mor-monoid-action]]. Konstrukcija: [[mor-g-sets]]. Specijalan
