@@ -280,14 +280,21 @@ body.one-plane #pane-order > .pane-bar { display: none; }
 .node.fmatch rect:first-of-type { stroke: var(--accent); stroke-width: 2; }
 .node.flink rect:first-of-type { stroke: #a678c8; stroke-width: 2.2; }
 .node.fmatch, .node.flink { opacity: 1; }
-.node.fdim { opacity: 0.12; }
+.node.fdim { opacity: 0.07; }
+/* The structure box carries .fdim on its outer group and had no rule at all,
+   so a filtered-out box stayed at full strength and the canvas never
+   quietened. It is the thing the eye lands on, so it goes dimmest. */
+.sbox.fdim { opacity: 0.08; pointer-events: none; }
 .fhide { display: none; }
-.sedge.fdim, .stie.fdim, .ssym.fdim, .slabel.fdim, .sregion.fdim { opacity: 0.1; pointer-events: none; }
+.sedge.fdim, .stie.fdim, .ssym.fdim, .slabel.fdim { opacity: 0.05; pointer-events: none; }
+/* A region frame is the map's furniture: it fades, but staying legible is
+   what tells the reader where on the map the few lit things are. */
+.sregion.fdim { opacity: 0.16; pointer-events: none; }
 .sedge.fmatch .line { stroke-width: 3.2; }
 .sedge.flink .line { stroke-width: 3.6; }
 .sedge.flink .line, .slabel.flink { filter: drop-shadow(0 0 3px #a678c8); }
 .slabel.fmatch { border-color: var(--accent); }
 .slabel.flink { border-color: #a678c8; }
-.group.g-fdim { opacity: 0.25; }
+.group.g-fdim { opacity: 0.14; }
 #f-none { position: fixed; left: 50%; transform: translateX(-50%); z-index: 25; padding: 7px 14px; font-size: 12px; color: #e0a458; background: var(--panel); border: 1px solid #e0a458; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
 #f-none[hidden] { display: none; }
