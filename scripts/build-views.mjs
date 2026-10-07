@@ -812,6 +812,9 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
       title: plainTitle(t.fm.title),
       group: groups.groupOf.get(id) ?? null,
     };
+    // A tree's own region, which the filter reads: any tree may carry one, not
+    // only an object, and the structure blob knows about objects alone.
+    if (typeof t.fm.region === "string" && t.fm.region) nodeInfo[id].region = t.fm.region;
     // The strip reads diagrams from the trees about the picked one.
     const about = Array.isArray(t.fm.about) ? t.fm.about.filter((a) => trees.has(a)) : [];
     if (about.length) nodeInfo[id].about = about;
@@ -935,6 +938,14 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
     nodes: nodeInfo,
     deps: depsOf,
     proofsOf: proofsOfObj,
+    // The Croatian word for every taxon the vault actually uses, so the filter
+    // tray can label a chip without a second table on the client.
+    taxa: Object.fromEntries(
+      [...new Set(ids.map((id) => trees.get(id).fm.taxon))]
+        .filter((tx) => TAXON_HR[tx])
+        .sort((a, b) => TAXON_HR[a].localeCompare(TAXON_HR[b], "hr"))
+        .map((tx) => [tx, TAXON_HR[tx]])
+    ),
     geom: { NODE_W, NODE_H, PRF_W, PRF_H, HEADER_H, PAD, COLLAPSED_W },
     showExrDefault,
     exrCount,
@@ -949,6 +960,14 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
     // reload or a second tab of this vault resumes the same conversation.
     sessionKey:
       "forest-session:" +
+      (forest.source?.title ?? "") +
+      "|" +
+      (forest.created ?? ""),
+    // How this reader arranged the two graphs — side by side or on one plane,
+    // the split, which pane is folded. Per vault, like progress, because the
+    // right split depends on how wide that vault's structure canvas is.
+    viewKey:
+      "forest-view:" +
       (forest.source?.title ?? "") +
       "|" +
       (forest.created ?? ""),
@@ -1001,22 +1020,34 @@ ${clientCss()}</style>
 <div id="topbar">
   <h1>${escapeHtml(title)}</h1>
   <span class="sub">${escapeHtml(srcLine)}</span>
-${structure ? `  <div id="tabs"><button class="tab on" data-tab="order">Redoslijed</button><button class="tab" data-tab="structure">Struktura</button></div>
+${structure ? `  <div id="modes"><button class="mode on" data-mode="split">Jedno uz drugo</button><button class="mode" data-mode="plane">Jedna ploča</button></div>
 ` : ""}  <input id="search" type="search" placeholder="Traži po naslovu ili id…">
   <label><input type="checkbox" id="tglPrf"> Prikaži dokaze</label>
   <label${exrCount ? "" : ' style="display:none"'}><input type="checkbox" id="tglExr"${showExrDefault ? " checked" : ""}> Prikaži zadatke${exrCount ? ` (${exrCount})` : ""}</label>
   <button id="expandAll">Proširi sve</button>
   <button id="collapseAll">Sažmi sve</button>
+  <div id="fbar"><button id="f-open">Filtri ▾</button><span id="f-count"></span><span id="f-state"></span><label><input type="checkbox" id="f-hide"> sakrij</label><button id="f-clear" hidden>Očisti filtar</button></div>
   <div id="legend">${stateLegend}${legend}</div>
 ${structure ? `  <div id="slegend">${kindLegend}</div>
 ` : ""}</div>
 <div id="canvas">
-<svg id="svg">
-${structure ? `  <defs>${markers}</defs>
-` : ""}  <g id="world"><g id="glayer">${groupSvgs}</g>${structure ? `<g id="slayer" style="display:none">${structureSvg(structure, trees)}</g>` : ""}</g>
-</svg>
-${structure ? `<div id="slabels"></div>
+  <section id="pane-order" class="pane">
+    <div class="pane-bar"><button class="pane-fold" data-pane="order" title="Sklopi ili rasklopi">▾</button><span class="pane-name">Redoslijed</span><span class="pane-sub">stabla i preduvjeti</span></div>
+    <div class="pane-view" id="view-order">
+      <svg id="svg"><g id="world"><g id="pareas"></g><g id="glayer">${groupSvgs}</g></g></svg>
+    </div>
+  </section>
+${structure ? `  <div id="divider" title="Povuci da promijeniš podjelu"></div>
+  <section id="pane-structure" class="pane">
+    <div class="pane-bar"><button class="pane-fold" data-pane="structure" title="Sklopi ili rasklopi">▾</button><span class="pane-name">Struktura</span><span class="pane-sub">vrste, primjeri i strelice</span></div>
+    <div class="pane-view" id="view-structure">
+      <svg id="svg2"><defs id="sdefs">${markers}</defs><g id="world2"><g id="slayer">${structureSvg(structure, trees)}</g></g></svg>
+      <div id="slabels"></div>
+    </div>
+  </section>
 ` : ""}</div>
+<div id="ftray" hidden></div>
+<div id="f-none" hidden></div>
 <aside id="panel"><button id="close" title="Zatvori">×</button><div id="panel-body"></div></aside>${hasCd ? `
 <div id="strip" class="empty"><div class="strip-bar"><button id="strip-toggle" class="strip-title">▾ Dijagrami <span id="strip-count"></span></button><div id="strip-tabs"></div></div><div id="strip-body"></div></div>` : ""}${twoLevel ? `
 <div id="focusbar" hidden><span id="fb-what"></span><button id="fb-back">Natrag na cijeli graf</button></div>
@@ -1026,6 +1057,8 @@ ${structure ? `<div id="slabels"></div>
 <script>window.TREES = ${contentJson};</script>
 ${structure ? `<script>window.STRUCTURE = ${structureJson};</script>
 ` : ""}<script>
+${filterJs()}</script>
+<script>
 ${clientJs()}</script>
 </body>
 </html>
@@ -1034,12 +1067,33 @@ ${clientJs()}</script>
 
 // The page's runtime and stylesheet live beside each other in lib/client/ and
 // are inlined verbatim, so the page still works from file:// with no network.
-const CLIENT_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), "lib", "client");
+const LIB_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), "lib");
+const CLIENT_DIR = path.join(LIB_DIR, "client");
 function clientJs() {
   return fs.readFileSync(path.join(CLIENT_DIR, "forest.js"), "utf8");
 }
 function clientCss() {
   return fs.readFileSync(path.join(CLIENT_DIR, "forest.css"), "utf8");
+}
+
+// The filter engine is one file for two consumers: Node imports lib/filter.mjs
+// and unit-tests it, the page gets the same source with its single trailing
+// `export` line stripped and the module object handed to a global. Stripping
+// here rather than keeping a second copy is what stops the page and the tests
+// from drifting; if the module ever grows a second export statement or spreads
+// one over two lines, this throws instead of shipping a broken page.
+function filterJs() {
+  const src = fs.readFileSync(path.join(LIB_DIR, "filter.mjs"), "utf8");
+  const lines = src.split("\n");
+  const exports = lines.filter((l) => /^export\b/.test(l));
+  if (exports.length !== 1 || !/;\s*$/.test(exports[0])) {
+    throw new Error(
+      "filter.mjs must end with exactly one single-line `export {…};` statement " +
+        `so it can be inlined (found ${exports.length})`
+    );
+  }
+  const body = lines.filter((l) => !/^export\b/.test(l)).join("\n");
+  return `window.FOREST_FILTER = (function () {\n${body}\nreturn FOREST_FILTER;\n})();`;
 }
 
 // --------------------------------------------------------------------- dag.md

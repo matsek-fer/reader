@@ -5,8 +5,8 @@
 }
 * { box-sizing: border-box; margin: 0; }
 html, body { height: 100%; }
-body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; overflow: hidden; }
-#topbar { position: fixed; inset: 0 0 auto 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--border); }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; overflow: hidden; display: flex; flex-direction: column; }
+#topbar { position: relative; flex: 0 0 auto; z-index: 10; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--border); }
 #topbar h1 { font-size: 15px; font-weight: 600; margin-right: 6px; white-space: nowrap; }
 #topbar .sub { color: var(--fg-muted); font-size: 12px; }
 #search { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; width: 220px; }
@@ -21,12 +21,15 @@ body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-s
 #legend .lgs-ready { border-color: var(--st-ready); background: color-mix(in srgb, var(--st-ready) 8%, var(--card)); }
 #legend .lgs-not { opacity: 0.55; }
 #legend .lgsep { width: 1px; align-self: stretch; background: var(--border); }
-#canvas { position: absolute; inset: 0; cursor: grab; }
-#canvas.panning { cursor: grabbing; }
+#canvas { position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
 svg { width: 100%; height: 100%; display: block; }
-.grp-box { fill: var(--panel); stroke: var(--border); rx: 10; }
+/* An area — a section of the requirements graph, a region of the structure
+   canvas, a whole graph on the shared plane — is a tint and a quiet word, never
+   a frame: it says where you are without competing with what stands inside it.
+   The three wear the same clothes on purpose. */
+.grp-box { fill: color-mix(in srgb, var(--fg) 4%, transparent); stroke: color-mix(in srgb, var(--fg) 9%, transparent); rx: 10; }
 .grp-hrect { fill: transparent; cursor: pointer; }
-.grp-header text { fill: var(--fg); font-size: 13px; font-weight: 600; pointer-events: none; }
+.grp-header text { fill: color-mix(in srgb, var(--fg) 85%, transparent); font-size: 12.5px; font-weight: 500; pointer-events: none; }
 .grp-header .grp-count { fill: var(--fg-muted); font-weight: 400; font-size: 12px; }
 .grp-header .grp-arrow { fill: var(--fg-muted); }
 .node rect:first-of-type { fill: var(--card); stroke: var(--border); }
@@ -108,19 +111,21 @@ svg { width: 100%; height: 100%; display: block; }
 .mp-actions { margin-top: 8px; display: flex; gap: 8px; }
 .mp-actions button { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .mp-actions button:hover { background: var(--card-hi); }
-/* --- Struktura: tabs, kind legend, object boxes, edges, overlay labels --- */
-#tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-#tabs .tab { background: var(--card); color: var(--fg-muted); border: none; border-radius: 0; padding: 5px 12px; font-size: 13px; cursor: pointer; }
-#tabs .tab + .tab { border-left: 1px solid var(--border); }
-#tabs .tab.on { background: var(--card-hi); color: var(--fg); }
-body.tab-structure #topbar > label, body.tab-structure #expandAll, body.tab-structure #collapseAll, body.tab-structure #legend { display: none; }
+/* --- Struktura: the arrangement switch, kind legend, boxes, edges, labels --- */
+#modes { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+#modes .mode { background: var(--card); color: var(--fg-muted); border: none; border-radius: 0; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+#modes .mode + .mode { border-left: 1px solid var(--border); }
+#modes .mode.on { background: var(--card-hi); color: var(--fg); }
+/* The controls of a graph belong to the bar only while that graph is on screen:
+   fold the requirements pane away and its toggles and legend go with it. */
+body.fold-order #topbar > label, body.fold-order #expandAll, body.fold-order #collapseAll, body.fold-order #legend { display: none; }
 #slegend { display: none; flex-wrap: wrap; gap: 8px 12px; font-size: 12px; color: var(--fg-muted); }
-body.tab-structure #slegend { display: flex; }
+body.has-struct:not(.fold-structure) #slegend { display: flex; }
 #slegend .lg { display: inline-flex; align-items: center; gap: 4px; }
 #slegend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
 /* The label layer is HTML over the SVG and wears the same pan/zoom matrix,
    so KaTeX labels stay glued to their edges without foreignObject. */
-#slabels { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; visibility: hidden; }
+#slabels { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .slabel { position: absolute; transform: translate(-50%, -50%); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-size: 12px; line-height: 18px; white-space: nowrap; pointer-events: auto; cursor: pointer; }
 .slabel:hover { border-color: currentColor; }
 .slabel .sep { margin: 0 5px; color: var(--fg-muted); }
@@ -191,13 +196,13 @@ body.tab-structure #slegend { display: flex; }
 /* A tie too long to draw ends in its kind's name, so it has to be read. */
 .stie.far { stroke-width: 1.4; opacity: .8; }
 .stie-name { fill: var(--fg-muted); font-size: 9.5px; font-style: italic; pointer-events: none; }
-.sreg-box { fill: color-mix(in srgb, var(--panel) 60%, transparent); stroke: var(--border); stroke-dasharray: 7 6; }
-.sreg-title { fill: var(--fg-muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; pointer-events: none; }
+.sreg-box { fill: color-mix(in srgb, var(--fg) 4%, transparent); stroke: color-mix(in srgb, var(--fg) 9%, transparent); }
+.sreg-title { fill: var(--fg-muted); font-size: 11px; font-weight: 500; letter-spacing: .07em; opacity: .78; pointer-events: none; }
 #slegend .lgb { width: 14px; height: 9px; border-radius: 2px; display: inline-block; background: var(--card); border: 1px solid var(--border); }
 #slegend .lgb-kind { border-left: 3px solid #e9d66b; }
 #slegend .lgb-inst { background: color-mix(in srgb, #e9d66b 13%, var(--card-hi)); border-style: dashed; border-color: #e9d66b; }
 #shint { display: none; }
-body.tab-structure #shint { display: inline; }
+body.has-struct:not(.fold-structure) #shint { display: inline; }
 /* Zoomed into one definition: everything else stays on screen, out of the way. */
 body.sfocus .off { opacity: 0.08; pointer-events: none; }
 #focusbar, #layoutbar { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 24; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: min(760px, 92vw); padding: 7px 12px; font-size: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
@@ -216,3 +221,73 @@ body.sfocus .off { opacity: 0.08; pointer-events: none; }
 .level-chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-muted); }
 .level-chip.lvl-kind { border-color: #e9d66b; color: #e9d66b; background: color-mix(in srgb, #e9d66b 18%, transparent); }
 .level-chip.lvl-instance { border-style: dashed; border-color: #e9d66b; color: #e9d66b; background: color-mix(in srgb, #e9d66b 10%, transparent); }
+
+/* --- two arrangements of one working area -------------------------------- */
+/* Side by side is the default: the requirements graph and the structure graph
+   are two views of one vault, and the cross-link between them only pays off
+   when both are visible. Either pane folds to a rail, which is what the tab
+   switcher used to do, and folding keeps the filter and the selection — the
+   state lives in JS, not in the DOM that goes away. */
+.pane { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+#pane-order { flex: 0 0 auto; }
+#pane-structure { flex: 1 1 0; border-left: 1px solid var(--border); }
+body:not(.has-struct) .pane-bar { display: none; }
+.pane-bar { display: flex; gap: 8px; align-items: center; padding: 3px 10px; background: color-mix(in srgb, var(--panel) 70%, transparent); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); white-space: nowrap; }
+.pane-name { font-size: 12px; font-weight: 500; color: color-mix(in srgb, var(--fg) 85%, transparent); }
+.pane-fold { background: none; border: none; color: var(--fg-muted); font-size: 12px; cursor: pointer; padding: 0 2px; }
+.pane-fold:hover { color: var(--fg); }
+.pane-view { position: relative; flex: 1 1 auto; overflow: hidden; cursor: grab; }
+.pane-view.panning { cursor: grabbing; }
+.pane.folded .pane-view { display: none; }
+.pane.folded .pane-bar { flex-direction: column; align-items: center; height: 100%; border-bottom: none; padding: 6px 0; gap: 10px; }
+.pane.folded .pane-name { writing-mode: vertical-rl; letter-spacing: .06em; }
+.pane.folded .pane-sub { display: none; }
+#divider { flex: 0 0 5px; background: var(--border); cursor: col-resize; }
+#divider:hover, #divider.dragging { background: var(--accent); }
+/* One plane: the structure layer joins the requirements layer in one world, so
+   a single pan carries both. */
+body.one-plane #divider, body.one-plane #pane-structure { display: none; }
+body.one-plane #pane-order { flex: 1 1 auto; }
+body.one-plane #pane-order > .pane-bar { display: none; }
+.parea-box { fill: color-mix(in srgb, var(--fg) 3%, transparent); stroke: color-mix(in srgb, var(--fg) 8%, transparent); }
+.parea-title { fill: var(--fg-muted); font-size: 26px; font-weight: 500; letter-spacing: .07em; opacity: .75; pointer-events: none; }
+.parea-sub { fill: var(--fg-muted); font-size: 19px; opacity: .5; pointer-events: none; }
+
+/* --- the filter bar ------------------------------------------------------- */
+#fbar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+#fbar button { background: var(--card); color: var(--fg-muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px; font-size: 12px; cursor: pointer; }
+#fbar button:hover { color: var(--fg); }
+#fbar button.on { color: var(--accent); border-color: var(--accent); }
+#f-count { font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+#f-state { font-size: 12px; color: var(--fg-muted); max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#f-state.lit { color: var(--accent); }
+#f-state.warn { color: #e0a458; }
+#ftray { position: fixed; z-index: 26; left: 12px; width: min(680px, 94vw); max-height: 58vh; overflow-y: auto; padding: 10px 12px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+#ftray[hidden] { display: none; }
+#ftray h4 { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-muted); font-weight: 600; margin: 10px 0 5px; }
+#ftray h4:first-child { margin-top: 0; }
+.fchip { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; margin: 0 5px 5px 0; }
+.fchip:hover { background: var(--card-hi); }
+.fchip.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#f-json { width: 100%; min-height: 56px; font: 11px/1.45 ui-monospace, monospace; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 6px; resize: vertical; }
+#ftray .frow { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+#ftray .fhint { font-size: 11px; color: var(--fg-muted); }
+#ftray .fhint code { background: var(--bg); padding: 1px 4px; border-radius: 3px; }
+
+/* The filter's two channels, kept apart from search (white) and selection
+   (orange): the match is lit in the accent, and what the selection's `about`
+   ties to it in violet. A link beats dimming — it answers a click. */
+.node.fmatch rect:first-of-type { stroke: var(--accent); stroke-width: 2; }
+.node.flink rect:first-of-type { stroke: #a678c8; stroke-width: 2.2; }
+.node.fmatch, .node.flink { opacity: 1; }
+.node.fdim { opacity: 0.12; }
+.fhide { display: none; }
+.sedge.fdim, .stie.fdim, .ssym.fdim, .slabel.fdim, .sregion.fdim { opacity: 0.1; pointer-events: none; }
+.sedge.fmatch .line { stroke-width: 3.2; }
+.sedge.flink .line { stroke-width: 3.6; }
+.sedge.flink .line, .slabel.flink { filter: drop-shadow(0 0 3px #a678c8); }
+.slabel.fmatch { border-color: var(--accent); }
+.slabel.flink { border-color: #a678c8; }
+.group.g-fdim { opacity: 0.25; }
+#f-none { position: fixed; left: 50%; transform: translateX(-50%); z-index: 25; padding: 7px 14px; font-size: 12px; color: #e0a458; background: var(--panel); border: 1px solid #e0a458; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+#f-none[hidden] { display: none; }

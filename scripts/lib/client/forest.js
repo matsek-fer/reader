@@ -1,8 +1,35 @@
 (function () {
   'use strict';
   var F = window.FOREST, G = F.geom;
+  var S = window.STRUCTURE || null;
+  var FF = window.FOREST_FILTER || null;
+  // Two graphs, two panes, one working area. In the split arrangement each pane
+  // owns an <svg> and its own pan/zoom, because the two are separate graphs and
+  // a shared zoom would be wrong for both. In the one-plane arrangement the
+  // structure layer and its label overlay move into the order pane's world and
+  // the two are carried by one pan.
   var svg = document.getElementById('svg');
   var world = document.getElementById('world');
+  var svg2 = document.getElementById('svg2');
+  var world2 = document.getElementById('world2');
+  var slayer = document.getElementById('slayer');
+  var slabels = document.getElementById('slabels');
+  var sdefs = document.getElementById('sdefs');
+  var pareas = document.getElementById('pareas');
+  var canvas = document.getElementById('canvas');
+  var topbar = document.getElementById('topbar');
+  var PANE = {
+    order: { key: 'order', el: document.getElementById('pane-order'), box: document.getElementById('view-order') },
+    structure: { key: 'structure', el: document.getElementById('pane-structure'), box: document.getElementById('view-structure') },
+  };
+  var views = { order: { x: 20, y: 20, k: 1 }, structure: { x: 20, y: 20, k: 1 }, plane: { x: 20, y: 20, k: 1 } };
+  var mode = 'split';
+  var folded = { order: false, structure: false };
+  var split = 0.46;
+  // The gap between the two graphs on the shared plane: wide enough that the
+  // eye reads two areas, narrow enough that one zoom-out holds both.
+  var PLANE_GAP = 160;
+  var planeOff = { x: 0, y: 0 };
   var expanded = {};
   F.groups.forEach(function (g, i) { expanded[g.id] = i === 0; });
   var showPrf = false;
@@ -27,6 +54,14 @@
     F.groups.forEach(function (g) {
       var el = document.getElementById('grp-' + g.id);
       var v = g.variants[key];
+      // A section the filter hides whole is hidden whole, and takes no room:
+      // a column of sections with holes in it reads as a broken page.
+      var gone = fHide && fset && !g.members.some(function (id) { return fLit(id); });
+      el.style.display = gone ? 'none' : '';
+      if (gone) {
+        frames[g.id] = { x: x, y: y, w: 0, h: 0, open: false, gone: true };
+        return;
+      }
       var open = expanded[g.id] && v.w > 0;
       var w = open ? v.w + 2 * G.PAD : G.COLLAPSED_W;
       var h = open ? G.HEADER_H + v.h + 2 * G.PAD : G.HEADER_H;
@@ -60,6 +95,8 @@
     });
     applyStates();
     applySearch();
+    planeLayout();
+    paintFilter();
   }
 
   // --- reading states -----------------------------------------------------
@@ -202,6 +239,9 @@
     document.querySelectorAll('.node.sel').forEach(function (n) { n.classList.remove('sel'); });
     selected = id;
     document.querySelectorAll('.node[data-id="' + id + '"]').forEach(function (n) { n.classList.add('sel'); });
+    // Picking in one graph lights the other: the trees a box is named by, the
+    // boxes and arrows a tree is about. The filter's own match is untouched.
+    setLink(id);
     panelBody.innerHTML = window.TREES[id] || '';
     var slot = panelBody.querySelector('.struct-sections');
     if (slot && S) slot.innerHTML = structureSections(id);
@@ -322,7 +362,7 @@
   });
   panelBody.addEventListener('click', function (ev) {
     var f = ev.target.closest('button[data-focus]');
-    if (f) { setTab('structure'); focusDefinition(f.getAttribute('data-focus')); return; }
+    if (f) { revealStructure(); focusDefinition(f.getAttribute('data-focus')); return; }
     var a = ev.target.closest('a[data-open]');
     if (a) { ev.preventDefault(); openPanel(a.getAttribute('data-open')); }
   });
@@ -363,94 +403,317 @@
     });
   }
 
-  // --- pan / zoom ---------------------------------------------------------
-  var view = { x: 0, y: 0, k: 1 };
-  var slabels = document.getElementById('slabels');
+  // --- pan / zoom, one view per pane --------------------------------------
+  // The working area sits below the top bar in the page's own flow, so a view's
+  // numbers are its pane's pixels and no toolbar height enters the arithmetic.
+  // Each arrangement keeps its own views: fold a pane, switch to the plane and
+  // back, and every graph is where the reader left it.
+  function viewOfLayer(which) { return mode === 'plane' ? views.plane : views[which]; }
+  function sview() { return viewOfLayer('structure'); }
+  function paneView(p) { return viewOfLayer(p.key); }
+  function paneBox() { return mode === 'plane' ? PANE.order.box : PANE.structure.box; }
+  function barTop() { return topbar.offsetHeight + 10; }
   function applyView() {
+    var vo = viewOfLayer('order');
     world.setAttribute('transform',
-      'translate(' + view.x + ',' + view.y + ') scale(' + view.k + ')');
+      'translate(' + vo.x + ',' + vo.y + ') scale(' + vo.k + ')');
+    if (slayer) {
+      // On the shared plane the structure layer carries its own place inside the
+      // one world; in the split it is the whole of its own world.
+      if (mode === 'plane') slayer.setAttribute('transform', 'translate(' + planeOff.x + ',' + planeOff.y + ')');
+      else slayer.removeAttribute('transform');
+    }
+    if (world2 && mode === 'split') {
+      var vs = views.structure;
+      world2.setAttribute('transform',
+        'translate(' + vs.x + ',' + vs.y + ') scale(' + vs.k + ')');
+    }
     if (slabels) {
-      slabels.style.transform = 'matrix(' + view.k + ',0,0,' + view.k + ',' + view.x + ',' + view.y + ')';
+      // The HTML label overlay wears the matrix of whichever view carries the
+      // structure layer, plus that layer's offset on the plane.
+      var v = sview();
+      var ox = mode === 'plane' ? planeOff.x : 0, oy = mode === 'plane' ? planeOff.y : 0;
+      slabels.style.transform =
+        'matrix(' + v.k + ',0,0,' + v.k + ',' + (v.x + ox * v.k) + ',' + (v.y + oy * v.k) + ')';
     }
   }
-  var canvas = document.getElementById('canvas');
-  canvas.addEventListener('wheel', function (ev) {
-    ev.preventDefault();
-    var factor = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
-    var k2 = Math.min(4, Math.max(0.1, view.k * factor));
-    var r = svg.getBoundingClientRect();
-    var px = ev.clientX - r.left, py = ev.clientY - r.top;
-    view.x = px - ((px - view.x) / view.k) * k2;
-    view.y = py - ((py - view.y) / view.k) * k2;
-    view.k = k2;
-    applyView();
-  }, { passive: false });
   var pan = null;
-  canvas.addEventListener('mousedown', function (ev) {
-    if (ev.target.closest('.node, .grp-header, .inst, .sedge, .slabel')) return;
-    pan = { x: ev.clientX - view.x, y: ev.clientY - view.y };
-    canvas.classList.add('panning');
+  ['order', 'structure'].forEach(function (key) {
+    var p = PANE[key];
+    if (!p.box) return;
+    p.box.addEventListener('wheel', function (ev) {
+      ev.preventDefault();
+      var v = paneView(p);
+      var factor = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+      var k2 = Math.min(4, Math.max(0.05, v.k * factor));
+      var r = p.box.getBoundingClientRect();
+      var px = ev.clientX - r.left, py = ev.clientY - r.top;
+      v.x = px - ((px - v.x) / v.k) * k2;
+      v.y = py - ((py - v.y) / v.k) * k2;
+      v.k = k2;
+      applyView();
+    }, { passive: false });
+    p.box.addEventListener('mousedown', function (ev) {
+      if (ev.target.closest('.node, .grp-header, .inst, .sedge, .slabel, .sbox')) return;
+      var v = paneView(p);
+      pan = { v: v, box: p.box, x: ev.clientX - v.x, y: ev.clientY - v.y };
+      p.box.classList.add('panning');
+    });
   });
   window.addEventListener('mousemove', function (ev) {
     if (!pan) return;
-    view.x = ev.clientX - pan.x; view.y = ev.clientY - pan.y;
+    pan.v.x = ev.clientX - pan.x; pan.v.y = ev.clientY - pan.y;
     applyView();
   });
   window.addEventListener('mouseup', function () {
-    pan = null; canvas.classList.remove('panning');
+    if (pan) pan.box.classList.remove('panning');
+    pan = null;
   });
+
+  // How far the requirements graph reaches, which is both its own fit and where
+  // the structure graph starts on the shared plane.
+  function orderSize() {
+    var w = 0, h = 0;
+    Object.keys(frames).forEach(function (k) {
+      if (frames[k].gone) return;
+      w = Math.max(w, frames[k].x + frames[k].w);
+      h = Math.max(h, frames[k].y + frames[k].h);
+    });
+    return { w: w, h: h };
+  }
+  // The diagram strip and the footer float over the working area, so a fit
+  // against the whole pane would put the graph's lowest rows under them.
+  function bottomChrome() {
+    var strip = document.getElementById('strip');
+    return (strip ? strip.offsetHeight : 0) + 30;
+  }
+  function fitOrder() {
+    var box = PANE.order.box, r = box.getBoundingClientRect();
+    if (!r.width) return;
+    var v = views.order, sz = orderSize();
+    v.k = Math.min(1, (r.width - 40) / (sz.w + 40));
+    v.x = 20; v.y = 20;
+  }
+
+  // How the reader last arranged this vault: which arrangement, where the
+  // divider sat, which pane was folded. Per vault, because the right split
+  // depends on how wide that vault's structure canvas is — and in a try/catch,
+  // because a private window hands out no storage and the page must still open.
+  function restoreViewState() {
+    var raw = null;
+    try { raw = localStorage.getItem(F.viewKey); } catch (e) { storageOk = false; }
+    if (!raw) return;
+    try {
+      var v = JSON.parse(raw);
+      if (!v || v.v !== 1) return;
+      if (S && v.mode === 'plane') mode = 'plane';
+      if (typeof v.split === 'number' && v.split > 0.1 && v.split < 0.9) split = v.split;
+      if (v.folded) {
+        folded.order = !!v.folded.order;
+        folded.structure = !!v.folded.structure;
+        if (folded.order && folded.structure) folded.order = folded.structure = false;
+      }
+      if (!S) { mode = 'split'; folded.order = folded.structure = false; }
+    } catch (e) { /* corrupt entry: the defaults are a fine page */ }
+  }
+  function saveViewState() {
+    if (!storageOk) return;
+    try {
+      localStorage.setItem(F.viewKey, JSON.stringify({
+        v: 1, mode: mode, split: Math.round(split * 1000) / 1000, folded: folded,
+      }));
+    } catch (e) { storageOk = false; storageNotice(); }
+  }
 
   loadProgress();
   if (!storageOk) storageNotice();
+  restoreViewState();
+  applyArrangement(true);
   relayout();
-  // Start fitted to width, below the toolbar.
-  var topbarH = document.getElementById('topbar').offsetHeight;
-  var maxW = 0, maxY = 0;
-  Object.keys(frames).forEach(function (k) {
-    maxW = Math.max(maxW, frames[k].x + frames[k].w);
-    maxY = Math.max(maxY, frames[k].y + frames[k].h);
-  });
-  var r = svg.getBoundingClientRect();
-  view.k = Math.min(1, (r.width - 40) / (maxW + 40));
-  view.x = 20; view.y = topbarH + 12;
+  fitOrder();
   applyView();
+  // A resized window changes what a fraction of the working area means, and the
+  // panes are already flex; only the fixed bars have to be told.
+  window.addEventListener('resize', function () {
+    if (lbar && !lbar.hidden) lbar.style.top = barTop() + 'px';
+    var fb = document.getElementById('focusbar');
+    if (fb && !fb.hidden) fb.style.top = barTop() + 'px';
+    placeTray();
+  });
 
-  // ---- Struktura: the second tab -------------------------------------------
+  // ---- Struktura ------------------------------------------------------------
   // Boxes come positioned from the build; the page draws the arrows between
   // them and places their KaTeX labels, since only the browser knows how
   // wide a rendered label is (as fitGroupTitle already does for SVG text).
-  var S = window.STRUCTURE || null;
-  var slayer = document.getElementById('slayer');
-  var tabsEl = document.getElementById('tabs');
-  var tab = 'order';
-  var views = { order: view, structure: { x: 20, y: topbarH + 20, k: 1 } };
-  var structureFitted = false;
   var KIND_COLOR = {}, KIND_HR = {}, objById = {}, arrowById = {};
   var sedges = [];
   // A loop is an arc 20 high and about as wide on the top side of its box:
   // small enough to stay in the gap between two rows.
   var LOOP_H = 20, LOOP_W = 16, LOOP_FLARE = 12, LOOP_PITCH = 44;
   var sTop = 0;
+  var structureFitted = false;
 
-  function setTab(name) {
-    if (!S) return;
-    tab = name;
-    var st = name === 'structure';
-    if (st && !structureFitted) { fitStructure(); structureFitted = true; }
-    view = views[name];
-    document.getElementById('glayer').style.display = st ? 'none' : '';
-    slayer.style.display = st ? '' : 'none';
-    slabels.style.visibility = st ? 'visible' : 'hidden';
-    document.body.classList.toggle('tab-structure', st);
-    if (!st) { unfocus(); if (lbar) lbar.hidden = true; }
-    else if (lbar && dirty) lbar.hidden = false;
-    tabsEl.querySelectorAll('.tab').forEach(function (b) {
-      b.classList.toggle('on', b.getAttribute('data-tab') === name);
+  // ---- the arrangement: side by side, or one plane -------------------------
+  // The switch is one function: it moves the structure layer, its arrow markers
+  // and its label overlay between the two panes' worlds and sets the pane
+  // widths. Everything else — the filter, the selection, the reading marks, a
+  // dragged layout — lives in JS and is untouched by the move, which is why
+  // folding a pane or changing arrangement loses nothing.
+  function applyArrangement(firstTime) {
+    var plane = mode === 'plane';
+    document.body.classList.toggle('one-plane', plane);
+    document.body.classList.toggle('has-struct', !!S);
+    if (S) {
+      if (plane) {
+        if (slayer.parentNode !== world) world.appendChild(slayer);
+        if (sdefs && sdefs.parentNode !== svg) svg.insertBefore(sdefs, svg.firstChild);
+        if (slabels.parentNode !== PANE.order.box) PANE.order.box.appendChild(slabels);
+      } else {
+        if (slayer.parentNode !== world2) world2.appendChild(slayer);
+        if (sdefs && sdefs.parentNode !== svg2) svg2.insertBefore(sdefs, svg2.firstChild);
+        if (slabels.parentNode !== PANE.structure.box) PANE.structure.box.appendChild(slabels);
+      }
+    }
+    // Without a structure layer there is one graph and it takes the window.
+    // Every width is set here, because a folded pane's rail has to beat both
+    // #pane-structure's own flex and the split's inline one.
+    // Folding one pane gives the window to the other, which is the whole point
+    // of folding: the split only means something while both are open.
+    PANE.order.el.style.flex = (plane || !S || folded.structure) ? '1 1 auto'
+      : folded.order ? '0 0 28px' : '0 0 ' + (split * 100).toFixed(2) + '%';
+    if (PANE.structure.el) {
+      PANE.structure.el.style.flex = (!plane && folded.structure) ? '0 0 28px' : '1 1 0';
+    }
+    ['order', 'structure'].forEach(function (k) {
+      if (!PANE[k].el) return;
+      var off = !plane && folded[k];
+      PANE[k].el.classList.toggle('folded', off);
+      document.body.classList.toggle('fold-' + k, plane ? false : folded[k]);
     });
-    applyView();
-    // Nothing in the layer has a size while it is hidden, so a symbol can
-    // only be measured once the tab is showing.
-    if (st) fitSymbols();
+    document.querySelectorAll('#modes .mode').forEach(function (b) {
+      b.classList.toggle('on', b.getAttribute('data-mode') === mode);
+    });
+    document.querySelectorAll('.pane-fold').forEach(function (b) {
+      b.textContent = folded[b.getAttribute('data-pane')] ? '▸' : '▾';
+    });
+    if (!firstTime) {
+      relayout();
+      if (S) {
+        if (plane) fitPlane();
+        else if (!folded.structure) { if (!structureFitted) { fitStructure(); structureFitted = true; } }
+        drawStructure();
+        measureStructure();
+      }
+      applyView();
+    }
+  }
+
+  // A pane that was hidden had no sizes, so anything measured in pixels — a
+  // KaTeX label's width, a symbol's scale — is measured when it comes back.
+  function measureStructure() {
+    if (!S) return;
+    var box = paneBox();
+    if (!box || !box.offsetWidth) return;
+    placeLabels();
+    fitSymbols();
+  }
+
+  function setMode(next) {
+    if (!S || next === mode) return;
+    unfocus();
+    mode = next;
+    applyArrangement(false);
+    saveViewState();
+  }
+  function setFold(key, off) {
+    if (!S || mode === 'plane' || !PANE[key].el) return;
+    folded[key] = off;
+    // Both folded would leave an empty window; the other one opens instead.
+    var other = key === 'order' ? 'structure' : 'order';
+    if (off && folded[other]) folded[other] = false;
+    applyArrangement(false);
+    saveViewState();
+  }
+  // The panel's "show this definition on the canvas" button needs the structure
+  // visible, whatever the reader last folded away.
+  function revealStructure() {
+    if (!S) return;
+    if (mode === 'split' && folded.structure) setFold('structure', false);
+  }
+
+  if (document.getElementById('modes')) {
+    document.getElementById('modes').addEventListener('click', function (ev) {
+      var b = ev.target.closest('.mode');
+      if (b) setMode(b.getAttribute('data-mode'));
+    });
+  }
+  document.querySelectorAll('.pane-fold').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var key = b.getAttribute('data-pane');
+      setFold(key, !folded[key]);
+    });
+  });
+
+  // The divider: a fraction of the working area, not a pixel count, so the
+  // split survives a resized window.
+  var divider = document.getElementById('divider');
+  if (divider) {
+    var dragSplit = null;
+    divider.addEventListener('mousedown', function (ev) {
+      ev.preventDefault();
+      dragSplit = canvas.getBoundingClientRect();
+      divider.classList.add('dragging');
+    });
+    window.addEventListener('mousemove', function (ev) {
+      if (!dragSplit) return;
+      folded.order = folded.structure = false;
+      split = Math.min(0.85, Math.max(0.15, (ev.clientX - dragSplit.left) / dragSplit.width));
+      applyArrangement(true);
+      applyView();
+    });
+    window.addEventListener('mouseup', function () {
+      if (!dragSplit) return;
+      dragSplit = null;
+      divider.classList.remove('dragging');
+      measureStructure();
+      saveViewState();
+    });
+  }
+
+  // Where the structure graph sits on the shared plane: to the right of the
+  // requirements graph, which is the same left-to-right order the two panes
+  // have, so switching arrangement does not flip the reader's mental map.
+  function planeLayout() {
+    if (!S) return;
+    planeOff.x = orderSize().w + PLANE_GAP;
+    planeOff.y = 0;
+    drawPlaneAreas();
+  }
+
+  // The two graphs, each in a faintly tinted area with a quiet title: the same
+  // treatment a region of the structure canvas and a section of the
+  // requirements graph get, so one visual language says "these belong together"
+  // at all three scales.
+  var AREA_PAD = 46, AREA_TITLE = 48;
+  function drawPlaneAreas() {
+    if (!pareas) return;
+    if (mode !== 'plane' || !S) { pareas.innerHTML = ''; return; }
+    var sz = orderSize();
+    var top = Math.min(0, sTop || 0);
+    var boxes = [
+      { x: 0, y: 0, w: sz.w, h: sz.h, t: 'Redoslijed', s: 'stabla i preduvjeti' },
+      { x: planeOff.x, y: planeOff.y + top, w: S.size.w, h: S.size.h - top,
+        t: 'Struktura', s: 'vrste, primjeri i strelice' },
+    ];
+    pareas.innerHTML = boxes.map(function (b) {
+      if (!(b.w > 0 && b.h > 0)) return '';
+      var x = b.x - AREA_PAD, y = b.y - AREA_PAD - AREA_TITLE;
+      return '<g class="parea"><rect class="parea-box" x="' + r1(x) + '" y="' + r1(y) +
+        '" width="' + r1(b.w + 2 * AREA_PAD) + '" height="' + r1(b.h + 2 * AREA_PAD + AREA_TITLE) +
+        '" rx="18"/><text class="parea-title" x="' + r1(x + 22) + '" y="' + r1(y + 34) + '">' +
+        escText(b.t) + '</text><text class="parea-sub" x="' + r1(x + 22) + '" y="' + r1(y + 34) +
+        '" dx="' + Math.round(b.t.length * 14.5 + 24) + '">' + escText(b.s) + '</text></g>';
+    }).join('');
   }
 
   // sTop is how far a loop on a top-row box, and its label, reach over the
@@ -466,8 +729,10 @@
   // canvas is one column of boxes and still opens fitted, as it always has.
   var READ_K = 0.75;
   function fitStructure() {
-    var r = svg.getBoundingClientRect();
-    var aw = r.width - 40, ah = r.height - topbarH - 120;
+    if (!S || !PANE.structure.box) return;
+    var r = PANE.structure.box.getBoundingClientRect();
+    if (!r.width) return;
+    var aw = r.width - 40, ah = r.height - 30 - bottomChrome();
     var k = Math.min(1.2, aw / (S.size.w + 40), ah / (S.size.h - sTop + 40));
     var floor = S.twoLevel ? READ_K : 0.2;
     var first = S.twoLevel && (S.regions || [])[0];
@@ -475,12 +740,28 @@
       k = Math.max(floor, Math.min(1.2, aw / (first.w + 40), ah / (first.h + 40)));
       views.structure.k = k;
       views.structure.x = 20 - first.x * k;
-      views.structure.y = topbarH + 20 - Math.min(first.y, sTop) * k;
+      views.structure.y = 20 - Math.min(first.y, sTop) * k;
       return;
     }
     views.structure.k = Math.max(floor, k);
     views.structure.x = 20;
-    views.structure.y = topbarH + 20 - sTop * views.structure.k;
+    views.structure.y = 20 - sTop * views.structure.k;
+  }
+
+  // The shared plane opens on the whole of both graphs, floor and all: seeing
+  // the two at once is the only reason to choose this arrangement, so here the
+  // fit wins over the readable-title zoom and the reader zooms into whichever
+  // half they want.
+  function fitPlane() {
+    var box = PANE.order.box, r = box.getBoundingClientRect();
+    if (!r.width || !S) return;
+    var sz = orderSize(), top = Math.min(0, sTop);
+    var w = planeOff.x + S.size.w + 80;
+    var h = Math.max(sz.h, S.size.h) - top + 80;
+    var k = Math.min(1, (r.width - 40) / w, (r.height - 30 - bottomChrome()) / h);
+    views.plane.k = Math.max(0.06, k);
+    views.plane.x = 20 + AREA_PAD * views.plane.k;
+    views.plane.y = 20 + (AREA_PAD + AREA_TITLE - top) * views.plane.k;
   }
 
   function boxOf(id) {
@@ -684,6 +965,9 @@
     slabels.innerHTML = lh;
     if (S.twoLevel) { drawTies(); drawRegions(); }
     fitSymbols();
+    // Edges, labels and ties were just replaced wholesale, so whatever the
+    // filter and the selection had lit has to be lit again.
+    paintFilter();
   }
 
   // An instance's tie to its kind: no head and no label, only the thin line
@@ -705,7 +989,7 @@
         var u = unit(q[0] - p[0], q[1] - p[1]);
         q = [p[0] + u[0] * TIE_STUB, p[1] + u[1] * TIE_STUB];
       }
-      h += '<line class="stie' + (far ? ' far' : '') + '" data-of="' + escText(o.of) + '" x1="' + r1(p[0]) + '" y1="' + r1(p[1]) +
+      h += '<line class="stie' + (far ? ' far' : '') + '" data-inst="' + escText(o.id) + '" data-of="' + escText(o.of) + '" x1="' + r1(p[0]) + '" y1="' + r1(p[1]) +
         '" x2="' + r1(q[0]) + '" y2="' + r1(q[1]) + '"/>';
       if (far) {
         var name = objTitle(o.of);
@@ -729,7 +1013,7 @@
           });
           if (clear) { at = spots[si]; break; }
         }
-        h += '<text class="stie-name" data-of="' + escText(o.of) + '" x="' + r1(at[0]) +
+        h += '<text class="stie-name" data-inst="' + escText(o.id) + '" data-of="' + escText(o.of) + '" x="' + r1(at[0]) +
           '" y="' + r1(at[1]) + '" text-anchor="' + (end < 0 ? 'end' : 'start') + '">' + escText(name) + '</text>';
       }
     });
@@ -897,8 +1181,9 @@
       if (!drag.live && Math.abs(ev.clientX - drag.cx) + Math.abs(ev.clientY - drag.cy) < DRAG_SLOP) return;
       drag.live = true;
       var p = S.pos[drag.id];
-      p.x = Math.round(drag.x0 + (ev.clientX - drag.cx) / view.k);
-      p.y = Math.round(drag.y0 + (ev.clientY - drag.cy) / view.k);
+      var dk = sview().k;
+      p.x = Math.round(drag.x0 + (ev.clientX - drag.cx) / dk);
+      p.y = Math.round(drag.y0 + (ev.clientY - drag.cy) / dk);
       drag.el.setAttribute('transform', 'translate(' + p.x + ',' + p.y + ')');
       scheduleRedraw();
     });
@@ -931,7 +1216,7 @@
   function showLayoutBar(msg, err) {
     if (!lbar) return;
     lbar.hidden = false;
-    lbar.style.top = (topbarH + 12) + 'px';
+    lbar.style.top = barTop() + 'px';
     lbar.classList.toggle('err', !!err);
     var save = document.getElementById('lb-save');
     save.hidden = !BRIDGE.on;
@@ -995,6 +1280,7 @@
       var a = arrowById[x];
       if (a) { arrows[x] = true; keep[a.from] = true; keep[a.to] = true; } else keep[x] = true;
     });
+    var view = sview();
     if (!defFocus.on) defFocus.view = { x: view.x, y: view.y, k: view.k };
     defFocus.on = true;
     document.body.classList.add('sfocus');
@@ -1015,7 +1301,7 @@
     document.getElementById('sregions').classList.add('off');
     var bar = document.getElementById('focusbar');
     bar.hidden = false;
-    bar.style.top = (topbarH + 12) + 'px';
+    bar.style.top = barTop() + 'px';
     document.getElementById('fb-what').textContent = 'Definicija vrste: ' + objTitle(id);
     // Fit the diagram: its boxes' bounding box, with room for the labels.
     var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
@@ -1025,10 +1311,11 @@
       x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y);
       x2 = Math.max(x2, b.x + b.w); y2 = Math.max(y2, b.y + b.h);
     });
-    var r = svg.getBoundingClientRect(), m = 90;
-    view.k = Math.max(0.2, Math.min(1.6, (r.width - 2 * m) / (x2 - x1), (r.height - topbarH - 2 * m) / (y2 - y1)));
-    view.x = (r.width - (x2 - x1) * view.k) / 2 - x1 * view.k;
-    view.y = topbarH + (r.height - topbarH - (y2 - y1) * view.k) / 2 - y1 * view.k;
+    var r = paneBox().getBoundingClientRect(), m = 70;
+    var ox = mode === 'plane' ? planeOff.x : 0, oy = mode === 'plane' ? planeOff.y : 0;
+    view.k = Math.max(0.2, Math.min(1.6, (r.width - 2 * m) / (x2 - x1), (r.height - 2 * m) / (y2 - y1)));
+    view.x = (r.width - (x2 - x1) * view.k) / 2 - (x1 + ox) * view.k;
+    view.y = (r.height - (y2 - y1) * view.k) / 2 - (y1 + oy) * view.k;
     applyView();
   }
   function unfocus() {
@@ -1037,7 +1324,11 @@
     document.body.classList.remove('sfocus');
     document.querySelectorAll('#slayer .off, #slabels .off').forEach(function (el) { el.classList.remove('off'); });
     document.getElementById('focusbar').hidden = true;
-    if (defFocus.view) { view.x = defFocus.view.x; view.y = defFocus.view.y; view.k = defFocus.view.k; applyView(); }
+    if (defFocus.view) {
+      var view = sview();
+      view.x = defFocus.view.x; view.y = defFocus.view.y; view.k = defFocus.view.k;
+      applyView();
+    }
   }
   if (document.getElementById('focusbar')) {
     document.getElementById('fb-back').addEventListener('click', unfocus);
@@ -1190,13 +1481,16 @@
     S.objects.forEach(function (o) { objById[o.id] = o; });
     S.arrows.forEach(function (a) { arrowById[a.id] = a; });
     basePos = snapshot();
+    planeLayout();
     drawStructure();
+    if (mode === 'plane') fitPlane();
+    else if (!folded.structure) { fitStructure(); structureFitted = true; }
+    applyView();
     placeLabels();
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeLabels);
-    tabsEl.addEventListener('click', function (ev) {
-      var b = ev.target.closest('.tab');
-      if (b) setTab(b.getAttribute('data-tab'));
-    });
+    fitSymbols();
+    // A label's width is a KaTeX measurement, so the first pass can land before
+    // the fonts do; the second one is what the reader actually sees.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureStructure);
     slayer.addEventListener('click', function (ev) {
       if (dragged) { dragged = false; return; }
       var n = ev.target.closest('.node, .inst, .sedge');
@@ -1206,6 +1500,386 @@
       var l = ev.target.closest('.slabel');
       if (l) openPanel(l.getAttribute('data-open'));
     });
+  }
+
+  // ---- filters: one expression over both graphs ----------------------------
+  // The two panes are themselves filters over one body of material — one keeps
+  // the depends DAG, the other the arrows — so a filter is the primitive, and
+  // every chip in the tray is nothing but a stored expression. The engine is
+  // lib/filter.mjs, inlined by the build and unit-tested in Node; this section
+  // is only the painting, the bar and the two ways in from outside.
+  //
+  // Two channels, never mixed: `fset` is the filter's match, `lset` is what the
+  // selected tree's `about` ties it to. A filter dims (or hides) what it leaves
+  // out; a link answers a click, so it beats dimming.
+  var fgraph = FF ? FF.buildGraph({ nodes: F.nodes, structure: S }) : null;
+  var fexpr = null, fset = null, lset = null, fHide = false, fcount = null;
+  var ftray = document.getElementById('ftray');
+  var fnone = document.getElementById('f-none');
+
+  function fLit(id) {
+    if (lset && lset[id]) return true;
+    return fset ? !!fset[id] : true;
+  }
+  // A filter about structure says nothing about the requirements graph, and
+  // vice versa. Dimming the half it never spoke of leaves that side of the
+  // window looking dead, so a half with no match keeps its ordinary paint.
+  function fHalfLive(tree) {
+    if (!fcount) return true;
+    return tree ? fcount.trees > 0 : (fcount.objects + fcount.arrows) > 0;
+  }
+  function fStateOf(id, tree) {
+    if (lset && lset[id]) return 'link';
+    if (!fset || !fHalfLive(tree)) return 'plain';
+    return fset[id] ? 'match' : 'out';
+  }
+  function paintEl(el, st, hid) {
+    if (!el) return;
+    el.classList.toggle('fmatch', st === 'match');
+    el.classList.toggle('flink', st === 'link');
+    el.classList.toggle('fdim', st === 'out' && !hid);
+    el.classList.toggle('fhide', st === 'out' && hid);
+  }
+  function paintFilter() {
+    var hid = fHide && !!fset;
+    var treeHalf = fHalfLive(true);
+    document.querySelectorAll('#glayer .node').forEach(function (n) {
+      paintEl(n, fStateOf(n.getAttribute('data-id'), true), hid);
+    });
+    F.groups.forEach(function (g) {
+      var el = document.getElementById('grp-' + g.id);
+      if (!el) return;
+      var any = !fset || !treeHalf || g.members.some(fLit);
+      el.classList.toggle('g-fdim', !any && !hid);
+    });
+    if (!S) return;
+    document.querySelectorAll('#slayer .sbox').forEach(function (b) {
+      var st = fStateOf(b.getAttribute('data-box'));
+      b.classList.toggle('fdim', st === 'out' && !hid);
+      b.classList.toggle('fhide', st === 'out' && hid);
+      var n = b.querySelector('.snode');
+      if (n) {
+        n.classList.toggle('fmatch', st === 'match');
+        n.classList.toggle('flink', st === 'link');
+      }
+    });
+    slabels.querySelectorAll('.ssym').forEach(function (s) {
+      paintEl(s, fStateOf(s.getAttribute('data-id')), hid);
+    });
+    // An edge may stand for an inverse pair, so it is lit if either arrow is.
+    // The first paint can land before the edges are built, hence the guard.
+    (sedges || []).forEach(function (e, i) {
+      var st = 'plain';
+      if (lset && e.ids.some(function (x) { return lset[x]; })) st = 'link';
+      else if (fset) st = e.ids.some(function (x) { return fset[x]; }) ? 'match' : 'out';
+      paintEl(document.querySelector('#sedges .sedge[data-id="' + e.ids[0] + '"]'), st, hid);
+      paintEl(slabels.querySelector('.slabel[data-i="' + i + '"]'), st, hid);
+    });
+    // A tie is a statement about two boxes, so it survives only with both.
+    document.querySelectorAll('#sties [data-inst]').forEach(function (t) {
+      var on = fLit(t.getAttribute('data-inst')) && fLit(t.getAttribute('data-of'));
+      t.classList.toggle('fdim', !on && !hid);
+      t.classList.toggle('fhide', !on && hid);
+    });
+    document.querySelectorAll('#sregions .sregion').forEach(function (r) {
+      var id = r.getAttribute('data-region');
+      var any = !fset || S.objects.some(function (o) {
+        return (o.region || '') === id && fLit(o.id);
+      });
+      r.classList.toggle('fdim', !any);
+    });
+  }
+
+  function countText(c) {
+    var parts = [];
+    if (fgraph && fgraph.objects.length) parts.push('kutije ' + c.objects);
+    if (fgraph && fgraph.arrows.length) parts.push('strelice ' + c.arrows);
+    parts.push('stabla ' + c.trees);
+    return parts.join(' · ');
+  }
+  // The count and the description are two fields, because the count is the one
+  // thing that must survive a narrow bar: a long filter description would
+  // otherwise elide the very number the reader is filtering to find.
+  function updateFbar(msg, cls) {
+    var el = document.getElementById('f-state');
+    var cnt = document.getElementById('f-count');
+    var clear = document.getElementById('f-clear');
+    if (!el) return;
+    if (cnt && fgraph) {
+      var c = fexpr && fcount ? fcount : {
+        objects: fgraph.objects.length, arrows: fgraph.arrows.length, trees: fgraph.trees.length,
+      };
+      cnt.textContent = countText(c) + (lset ? ' · povezano ' + (Object.keys(lset).length - 1) : '');
+      cnt.className = fexpr ? 'lit' : '';
+    }
+    el.textContent = msg || (fexpr ? FF.describeExpr(fexpr, fgraph) : '');
+    el.className = msg ? (cls || '') : (fexpr ? 'lit' : '');
+    if (clear) clear.hidden = !fexpr && !lset;
+    var open = document.getElementById('f-open');
+    if (open) open.classList.toggle('on', !!fexpr);
+  }
+  function noMatch(what) {
+    if (!fnone) return;
+    fnone.hidden = false;
+    fnone.style.top = barTop() + 'px';
+    fnone.textContent = 'Ništa ne odgovara filtru (' + what + ') — prikaz je ostavljen nedirnut.';
+  }
+  function hideNoMatch() { if (fnone) fnone.hidden = true; }
+
+  // The one way in. Returns the engine's own verdict, so a caller — the bar, the
+  // hash, a model through window.forestFilter — learns what happened.
+  function applyFilter(expr, opts) {
+    opts = opts || {};
+    if (!FF || !fgraph) return null;
+    var r = FF.evaluate(expr, fgraph);
+    if (r.fatal) {
+      var first = r.problems.filter(function (p) { return p.fatal; })[0];
+      updateFbar('Filtar: ' + FF.problemText(first), 'warn');
+      return r;
+    }
+    if (!r.count.total) {
+      // Nothing matched: say so and leave the view alone. An empty canvas reads
+      // as a broken page, not as an answer.
+      noMatch(FF.describeExpr(expr, fgraph));
+      return r;
+    }
+    hideNoMatch();
+    fexpr = expr; fset = r.ids; fcount = r.count;
+    if (fHide) relayout(); else paintFilter();
+    updateFbar();
+    markChips();
+    if (!opts.quiet) writeHash();
+    return r;
+  }
+  function clearFilter(opts) {
+    fexpr = null; fset = null; fcount = null;
+    hideNoMatch();
+    if (fHide) relayout(); else paintFilter();
+    updateFbar();
+    markChips();
+    if (!(opts && opts.quiet)) writeHash();
+  }
+  // `quiet` is for the hash reader: writing the hash back before the filter
+  // from that same hash has been applied would drop it from the address bar.
+  function setHide(on, quiet) {
+    fHide = !!on;
+    var cb = document.getElementById('f-hide');
+    if (cb) cb.checked = fHide;
+    relayout();
+    if (!quiet) writeHash();
+  }
+
+  // The cross-link, both ways, out of one symmetric predicate: picking a tree
+  // lights the objects and arrows its `about` names, and picking an object or
+  // arrow lights the trees that name it. It survives folding a pane and
+  // changing arrangement, because it is a set of ids and not a drawing.
+  function setLink(id) {
+    if (!FF || !fgraph || !fgraph.node[id]) { lset = null; paintFilter(); updateFbar(); return; }
+    var r = FF.evaluate({ about: id }, fgraph);
+    // A tree that is about nothing, and that nothing is about, lights only
+    // itself — no reason to paint the page for it.
+    lset = r.count.total > 1 ? r.ids : null;
+    paintFilter();
+    updateFbar();
+  }
+
+  // ---- the filter bar and its tray ----------------------------------------
+  function placeTray() {
+    if (ftray) ftray.style.top = barTop() + 'px';
+    if (fnone && !fnone.hidden) fnone.style.top = barTop() + 'px';
+  }
+  function sameExpr(a, b) {
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+  }
+  function markChips() {
+    if (!ftray) return;
+    ftray.querySelectorAll('.fchip').forEach(function (b) {
+      var i = +b.getAttribute('data-chip');
+      b.classList.toggle('on', !!fchips[i] && sameExpr(fchips[i].expr, fexpr));
+    });
+  }
+  var fchips = [];
+  function buildTray() {
+    if (!ftray || !FF || !fgraph) return;
+    fchips = FF.chipsFor(fgraph, { kinds: KIND_HR, taxa: F.taxa || {} });
+    var groups = [], seen = {};
+    fchips.forEach(function (c) {
+      if (!seen[c.group]) { seen[c.group] = []; groups.push(c.group); }
+      seen[c.group].push(c);
+    });
+    var h = groups.map(function (g) {
+      return '<h4>' + escText(g) + '</h4>' + seen[g].map(function (c) {
+        return '<button class="fchip" data-chip="' + fchips.indexOf(c) + '">' + escText(c.label) + '</button>';
+      }).join('');
+    }).join('');
+    h += '<h4>Vlastiti izraz (JSON)</h4>' +
+      '<textarea id="f-json" spellcheck="false" placeholder=\'{"tied-to": "obj-valuation"}\'></textarea>' +
+      '<div class="frow"><button id="f-run">Primijeni</button><button id="f-clear2">Očisti</button>' +
+      '<span class="fhint" id="f-msg"></span></div>' +
+      '<div class="frow"><span class="fhint">Predikati: ' +
+      FF.PREDICATES.map(function (p) { return '<code>' + escText(p.name) + '</code>'; }).join(' ') +
+      ' · spoji ih s <code>and</code>, <code>or</code>, <code>not</code> · isti izraz ide i u adresu stranice, kao <code>#filter=…</code></span></div>';
+    ftray.innerHTML = h;
+    ftray.addEventListener('click', function (ev) {
+      var chip = ev.target.closest('.fchip');
+      if (chip) {
+        var c = fchips[+chip.getAttribute('data-chip')];
+        if (!c) return;
+        if (sameExpr(c.expr, fexpr)) clearFilter();
+        else {
+          document.getElementById('f-json').value = JSON.stringify(c.expr);
+          applyFilter(c.expr);
+        }
+        return;
+      }
+      var b = ev.target.closest('button');
+      if (!b) return;
+      if (b.id === 'f-run') runJson();
+      else if (b.id === 'f-clear2') { document.getElementById('f-json').value = ''; clearFilter(); }
+    });
+    ftray.addEventListener('keydown', function (ev) {
+      // Enter applies, so a pasted expression needs no reach for the mouse;
+      // shift-enter is still a newline, since an expression may be pretty.
+      if (ev.key === 'Enter' && !ev.shiftKey && ev.target.id === 'f-json') {
+        ev.preventDefault();
+        runJson();
+      }
+    });
+  }
+  function runJson() {
+    var ta = document.getElementById('f-json'), msg = document.getElementById('f-msg');
+    var p = FF.parseExpr(ta.value);
+    if (!p.expr) {
+      msg.textContent = FF.problemText(p.problems[0]);
+      return;
+    }
+    var r = applyFilter(p.expr);
+    msg.textContent = r && r.problems.length
+      ? r.problems.map(FF.problemText).join(' · ')
+      : (r ? 'Pogodaka: ' + r.count.total : '');
+  }
+  if (document.getElementById('f-open')) {
+    document.getElementById('f-open').addEventListener('click', function () {
+      placeTray();
+      ftray.hidden = !ftray.hidden;
+    });
+  }
+  if (document.getElementById('f-clear')) {
+    document.getElementById('f-clear').addEventListener('click', function () {
+      lset = null;
+      var ta = document.getElementById('f-json');
+      if (ta) ta.value = '';
+      clearFilter();
+    });
+  }
+  if (document.getElementById('f-hide')) {
+    document.getElementById('f-hide').addEventListener('change', function (ev) {
+      setHide(ev.target.checked);
+    });
+  }
+
+  // ---- the two ways in from outside ---------------------------------------
+  // The URL hash, so a skill can open the page already filtered, and a small
+  // documented object on the page, so a natural-language layer can drive the
+  // same engine without touching the DOM. Both are described in
+  // docs/forest-format.md beside the grammar.
+  function hashParts() {
+    var out = {};
+    location.hash.replace(/^#/, '').split('&').forEach(function (p) {
+      if (!p) return;
+      var i = p.indexOf('=');
+      if (i < 0) return;
+      try {
+        out[decodeURIComponent(p.slice(0, i))] = decodeURIComponent(p.slice(i + 1));
+      } catch (e) { /* a half-encoded hash is simply not a filter */ }
+    });
+    return out;
+  }
+  var writingHash = false;
+  function writeHash() {
+    var parts = [];
+    if (fexpr) parts.push(FF.HASH_KEY + '=' + encodeURIComponent(JSON.stringify(fexpr)));
+    if (fHide) parts.push('hide=1');
+    if (S && mode === 'plane') parts.push('mode=plane');
+    var h = parts.length ? '#' + parts.join('&') : '';
+    if (h === location.hash || (!h && !location.hash)) return;
+    writingHash = true;
+    try {
+      // replaceState keeps the back button meaning what it meant; on a file://
+      // page a browser may refuse it, and then the URL simply stays behind.
+      history.replaceState(null, '', location.pathname + location.search + h);
+    } catch (e) { /* no history write: the page is still filtered */ }
+    writingHash = false;
+  }
+  function readHash() {
+    var p = hashParts();
+    if (p.mode && S) {
+      mode = p.mode === 'plane' ? 'plane' : 'split';
+      applyArrangement(false);
+    }
+    if (p.pane === 'order' || p.pane === 'structure') {
+      setFold(p.pane === 'order' ? 'structure' : 'order', true);
+    }
+    if (p.hide === '1' && !fHide) setHide(true, true);
+    if (p[FF.HASH_KEY]) {
+      var parsed = FF.parseExpr(p[FF.HASH_KEY]);
+      if (!parsed.expr) updateFbar('Filtar iz adrese: ' + FF.problemText(parsed.problems[0]), 'warn');
+      else {
+        var ta = document.getElementById('f-json');
+        if (ta) ta.value = JSON.stringify(parsed.expr);
+        applyFilter(parsed.expr, { quiet: true });
+      }
+    } else if (fexpr) clearFilter({ quiet: true });
+  }
+  window.addEventListener('hashchange', function () {
+    if (!writingHash) readHash();
+  });
+
+  if (FF && fgraph) {
+    buildTray();
+    updateFbar();
+    readHash();
+    // A tiny, documented surface for whoever drives this from outside — today a
+    // skill opening the page, later the natural-language layer. `describe()` is
+    // the important half: it hands back the grammar AND this vault's own
+    // vocabulary, so a model can write a valid expression without the vault.
+    window.forestFilter = {
+      version: 1,
+      apply: function (expr) {
+        var e = typeof expr === 'string' ? FF.parseExpr(expr) : { expr: expr, problems: [] };
+        if (!e.expr) return { ok: false, errors: e.problems.map(FF.problemText) };
+        var r = applyFilter(e.expr);
+        if (!r) return { ok: false, errors: ['filter engine missing'] };
+        return {
+          ok: !r.fatal && r.count.total > 0,
+          matched: Object.keys(r.ids).sort(),
+          count: r.count,
+          describe: FF.describeExpr(e.expr, fgraph),
+          errors: r.problems.map(FF.problemText),
+        };
+      },
+      clear: function () { lset = null; clearFilter(); return { ok: true }; },
+      hide: function (on) { setHide(on); return { hide: fHide }; },
+      link: function (id) { setLink(id); return { linked: lset ? Object.keys(lset).sort() : [] }; },
+      select: function (id) { if (F.nodes[id]) openPanel(id); return { selected: selected }; },
+      arrangement: function (next) {
+        if (next === 'plane' || next === 'split') setMode(next);
+        return { mode: mode, folded: { order: folded.order, structure: folded.structure }, split: split };
+      },
+      describe: function () {
+        return {
+          filter: fexpr,
+          hide: fHide,
+          count: fcount,
+          selected: selected,
+          linked: lset ? Object.keys(lset).sort() : [],
+          arrangement: { mode: mode, split: split, folded: { order: folded.order, structure: folded.structure } },
+          chips: fchips.map(function (c) { return { label: c.label, group: c.group, expr: c.expr }; }),
+          hash: 'otvori stranicu s #filter=<urlencoded JSON>[&hide=1][&mode=plane][&pane=structure]',
+          grammar: FF.vocabulary(fgraph),
+        };
+      },
+    };
   }
 
   // ---- Dijagrami: the bottom strip ----------------------------------------

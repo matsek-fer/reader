@@ -725,8 +725,9 @@ DAG over all trees, `pt` never among them.
   change a definition; an `up_to` that does not, or whose `inverse` was
   dropped, is dropped with a note. `pos` and `region` carry over as they
   are.
-- `scripts/build-views.mjs` gives a vault with objects a second tab,
-  *Struktura*: objects as boxes, arrows coloured by kind (a hom is
+- `scripts/build-views.mjs` gives a vault with objects a second graph,
+  *Struktura*, beside the requirements one — two panes by default, either
+  foldable, or both on one shared plane: objects as boxes, arrows coloured by kind (a hom is
   *morfizam*), an inverse pair as one two-headed edge whose labels are
   joined by ⇄, or by ≅ when either side has `up_to`. A loop is an arc on
   its box and a chain on its page. A typed object's page links its type
@@ -738,7 +739,9 @@ DAG over all trees, `pt` never among them.
   defining diagram, an instance's page its kind and its `values`, the canvas
   is divided into the declared [regions](#regions--subgraphs-that-read-on-their-own),
   and an authored [`pos`](#layout--authored-positions) is honoured where it
-  is given.
+  is given. A [filter](#filters-over-a-view--the-expression-language) over both
+  graphs is the page's way through a canvas with more arrows than the eye can
+  take, and picking in one graph lights what it is tied to in the other.
 
 ## forest-0.3 — the two levels
 
@@ -1157,6 +1160,94 @@ in its output is `forest.json`'s `created`).
   tree opens its full content in a side panel with an `obsidian://` link.
   The validator treats `forest.html` as optional — old vaults without it
   remain valid — but when the file exists it must be non-empty.
+
+### Filters over a view — the expression language
+
+**This is a view feature, not a format change: it adds no key to any tree.**
+Everything below is computed from what the trees already say, and a vault that
+never hears of it renders exactly as before.
+
+A vault's canvas outgrows the eye before it outgrows the mathematics — the
+Monsky vault draws 45 edges over 53 boxes — and the two graphs a reader already
+has are *themselves* filters over one body of material: *Redoslijed* keeps the
+`depends` DAG, *Struktura* keeps the arrows. So the primitive is a **filter**,
+the ready-made chips in the page's top bar are stored expressions and nothing
+more, and a later natural-language layer needs no new machinery: it emits an
+expression and calls the same entry point the chips call.
+
+An expression is **JSON**. One key is a predicate or a combinator; several keys
+in one object are their conjunction, which is the short form worth reaching for:
+
+```json
+{"and": [{"level": "instance"}, {"kind-of": "obj-field"}]}
+{"level": "instance", "kind-of": "obj-field"}
+{"not": {"arrow-kind": "hom"}}
+{"or": [{"region": "sperner"}, {"about": "thm-monsky"}]}
+```
+
+Evaluation produces a **set of ids** over everything the page holds — objects,
+arrows and ordinary trees alike, since all three are trees. A bare array is a
+conjunction; `{"and": []}` is everything and `{"or": []}` nothing.
+
+| predicate | argument | keeps |
+|---|---|---|
+| `level` | `kind` \| `instance` | Boxes on that level **and the arrows whose two ends are both on it** — per [which level each arrow touches](#which-level-each-arrow-touches), a construction joins two kinds and a hom two instances. `{"level": "kind"}` is therefore *the structures and the relationships between them*, with the named examples left out. A 0.2 typed object answers as the instance it becomes in 0.3. |
+| `kind-of` | `<obj- id>` | The instances of that kind. |
+| `arrow-kind` | one of the eight [kinds](#morphisms--mor--taxon-morphism) | Arrows of that kind. |
+| `tied-to` | `<obj- or mor- id>` | Everything attached to one structure: the box itself, its arrows in and out, its instances (or, from an instance, its kind), the entries of its [defining diagram](#a-kind-is-defined-by-a-diagram--data), and then every arrow whose two ends are already in the set — which is what makes a kind's neighbourhood read as a picture instead of a star. From an arrow: the arrow and its two ends. |
+| `in-data-of` | `<obj- id>` | One kind's defining diagram — the kind, the ids its `data` lists, and the ends of the arrows it lists. The same set the panel's *Prikaži definiciju na platnu* button focuses. |
+| `region` | `<kebab token>` | Trees and boxes carrying that [`region`](#regions--subgraphs-that-read-on-their-own), plus an arrow with no region of its own whose two ends are both inside it. |
+| `about` | `<id of any tree>` | The [`about`](#about-fields-and-assumes--any-tree) neighbourhood, **symmetric**: the id itself, what its `about` names, and every tree whose `about` names it. One predicate therefore serves both directions of the bridge between the requirements DAG and the structure graph. |
+| `taxon` | one of the sixteen taxa | Trees of that taxon. |
+| `id` | `<id>` | Exactly that tree. |
+| `text` | `<substring>` | Id or title contains it, case-blind. |
+
+Combinators are `and` (array), `or` (array) and `not` (one expression, or an
+array read as `not and`). Nesting is the only precedence there is; a multi-key
+object binds as one conjunction inside whatever encloses it.
+
+A value outside a closed set (`level`, `arrow-kind`, `taxon`) and an unknown
+predicate are **refused**, with a Croatian message, and the view is left
+untouched — a half-understood filter would be a lie about the vault. An id that
+resolves to nothing is only *noted*: the filter stands and matches nothing.
+When a legal expression matches nothing at all, the page says so and again
+leaves the view alone, because an empty canvas reads as a broken page.
+
+The match is **highlighted and the rest dimmed**; a *sakrij* toggle switches
+dimming for hiding. Nothing is destroyed either way — clearing restores the
+view exactly. Alongside it runs one more channel: picking a tree lights, in the
+structure graph, the objects and arrows its `about` names, and picking a box or
+an arrow lights the trees that name it. Both are the `about` predicate, and
+both survive folding a pane or changing arrangement.
+
+**Driving it from outside.** The page exposes `window.forestFilter`:
+
+| call | does |
+|---|---|
+| `apply(expr)` | Applies an expression (an object, or a JSON string). Returns `{ok, matched, count, describe, errors}`. |
+| `clear()` | Drops the filter and the link highlight. |
+| `hide(on)` | Switches dimming for hiding. |
+| `link(id)` | Lights one id's `about` neighbourhood — the cross-link, driven from outside. |
+| `select(id)` | Opens a tree's panel, as a click would. |
+| `arrangement(next)` | `"split"` (two panes) or `"plane"` (one shared plane); with no argument, reports the current one. |
+| `describe()` | The current state **and the grammar**: every predicate with its argument, plus this vault's own vocabulary — its regions, the arrow kinds it actually uses, its objects and arrows with their levels and ends. This is the call a natural-language layer makes first: with it a model can write a valid expression for a vault it has not read. |
+
+**And from a link.** The page reads its own URL hash, so a skill can open a
+vault already filtered:
+
+```
+views/forest.html#filter=%7B%22tied-to%22%3A%22obj-valuation%22%7D&hide=1&mode=plane
+```
+
+`filter` is a URL-encoded JSON expression; `hide=1` hides instead of dimming;
+`mode=plane` or `mode=split` picks the arrangement; `pane=structure` or
+`pane=order` folds the other one away. The page writes the same hash back as
+the reader filters, so the URL in the address bar is always the filter they are
+looking at, ready to paste to somebody else.
+
+The evaluator is `scripts/lib/filter.mjs` — one file for two consumers, unit
+tested in Node (`scripts/lib/filter.test.mjs`) and inlined into the page by
+`build-views.mjs`, so the page and the tests cannot drift apart.
 
 ## Copyright — the hard rules
 
