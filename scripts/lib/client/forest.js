@@ -16,6 +16,11 @@
   var slabels = document.getElementById('slabels');
   var sdefs = document.getElementById('sdefs');
   var pareas = document.getElementById('pareas');
+  // Up here, not beside the painter that uses them: init paints once before
+  // execution reaches the middle of this file, and a `var` assigned further
+  // down is hoisted but still undefined — which turned every plane-area
+  // coordinate into NaN on a reload straight into plane mode.
+  var AREA_PAD = 46, AREA_TITLE = 48;
   var canvas = document.getElementById('canvas');
   var topbar = document.getElementById('topbar');
   var PANE = {
@@ -35,6 +40,9 @@
   var showPrf = false;
   var showExr = F.showExrDefault;
   var selected = null;
+  // The reader's own trail through the vault — see "a step back" below. Declared
+  // up here with the rest of the state because the first paint records into it.
+  var navLine = [], navIdx = -1, navSeq = 0, navQuiet = 0, navPush = true;
 
   // Each group's frame, recomputed from the precomputed variant
   // coordinates on every toggle; nodes carry their own transforms.
@@ -96,12 +104,18 @@
     applyStates();
     applySearch();
     planeLayout();
+    // Expanding a section changes how far the requirements graph reaches, which
+    // is where the structure half BEGINS on the shared plane — so the layer has
+    // to be moved in the same breath. Without this the areas were redrawn at
+    // their new places while the boxes stayed behind, and an open section ran
+    // straight over material that never got out of the way.
+    applyView();
     paintFilter();
   }
 
   // --- reading states -----------------------------------------------------
-  // savladano: the reader marked it. spremno: every id in its FULL depends
-  // list is savladano (vacuously true for roots). nije spremno: otherwise.
+  // mastered: the reader marked it. ready: every id in its FULL depends list is
+  // mastered (vacuously true for roots). not ready: otherwise.
   var done = {};
   var storageOk = true;
   function stateOf(id) {
@@ -133,10 +147,10 @@
   }
   function storageNotice() {
     document.getElementById('storage-note').textContent =
-      'Napredak se ne može trajno spremiti — vrijedi samo dok je stranica otvorena.';
+      'Progress cannot be saved for good — it lasts only while this page is open.';
   }
 
-  // The count text ("12/21 savladano") is right-anchored at the bar's edge and
+  // The count text ("12/21 mastered") is right-anchored at the bar's edge and
   // the title left-anchored at x=30; on a collapsed 380px bar a long group
   // name would run straight through it. getComputedTextLength is the only
   // honest measure of SVG text, so trim against it and keep the full name in
@@ -163,8 +177,14 @@
     titleEl.textContent = lo > 0 ? full.slice(0, lo).trimEnd() + '…' : '…';
   }
 
+  // Readiness belongs to the ORDER graph alone. A box on the structure canvas
+  // is a structure, not a reading assignment: the canvas shows everything the
+  // vault holds at full strength and only a filter quietens it. The selector is
+  // what enforces that — a structure box carries .node too, because an object
+  // is a card in both graphs, so the unscoped query this used to run dimmed and
+  // outlined half the canvas by how far the reader had got.
   function applyStates() {
-    document.querySelectorAll('.node').forEach(function (n) {
+    document.querySelectorAll('#glayer .node').forEach(function (n) {
       var st = stateOf(n.getAttribute('data-id'));
       n.classList.toggle('st-done', st === 'done');
       n.classList.toggle('st-ready', st === 'ready');
@@ -179,7 +199,7 @@
       });
       var el = document.getElementById('grp-' + g.id);
       el.querySelector('.grp-count').textContent =
-        nDone + '/' + g.members.length + ' savladano';
+        nDone + '/' + g.members.length + ' mastered';
       fitGroupTitle(g.id, frames[g.id] ? frames[g.id].w : G.COLLAPSED_W);
       // The state outline belongs to the collapsed bar; an open group
       // shows its members' own outlines instead.
@@ -195,13 +215,13 @@
   document.getElementById('glayer').addEventListener('click', function (ev) {
     var badge = ev.target.closest('.prfbadge');
     if (badge) {
-      // "▸ dokaz" means "show me the proof": reveal proofs, open this one.
+      // "▸ proof" means "show me the proof": reveal proofs, open this one.
       if (!showPrf) {
         showPrf = true;
         document.getElementById('tglPrf').checked = true;
         relayout();
       }
-      openPanel(badge.getAttribute('data-prf'));
+      openPanel(badge.getAttribute('data-prf'), { toggle: true });
       return;
     }
     var hdr = ev.target.closest('.grp-header');
@@ -227,14 +247,23 @@
       return;
     }
     var node = ev.target.closest('.node');
-    if (node) openPanel(node.getAttribute('data-id'));
+    if (node) openPanel(node.getAttribute('data-id'), { toggle: true });
   });
 
   var panel = document.getElementById('panel');
   var panelBody = document.getElementById('panel-body');
   var markBox = document.createElement('div');
   markBox.id = 'panel-mark';
-  function openPanel(id) {
+  // `toggle` is for a click on the graph: the card IS the control, and a
+  // control that only ever opens has no off switch. A link in the panel or in
+  // the strip always opens, because following a link to the page you are on
+  // and having it vanish is not an answer to anything.
+  function openPanel(id, opts) {
+    opts = opts || {};
+    if (opts.toggle && selected === id && panel.classList.contains('open')) {
+      closePanel();
+      return;
+    }
     // An object is a node on both tabs, so every card with the id is marked.
     document.querySelectorAll('.node.sel').forEach(function (n) { n.classList.remove('sel'); });
     selected = id;
@@ -247,13 +276,32 @@
     if (slot && S) slot.innerHTML = structureSections(id);
     updateStrip(id);
     // The mark control sits right under the head so the panel's primary
-    // action is visible without scrolling.
+    // action is visible without scrolling. It is here for every tree, however
+    // the panel was reached — including a click on a structure box. Readiness
+    // belongs to the TREE, not to the graph the click came from: an object is a
+    // card in the order graph too, listed in an index.md section, and one id
+    // must not open two different panels depending on which pane the reader
+    // happened to be in (the trail and the address restore a tree, not a
+    // pane). What left the structure side is readiness PAINT on the canvas,
+    // which applyStates no longer applies.
     var head = panelBody.querySelector('.panel-head');
     if (head) head.after(markBox); else panelBody.prepend(markBox);
     renderMarkUI(id);
-    if (BRIDGE.on) mountAsk(id);
+    if (BRIDGE && BRIDGE.on) mountAsk(id);
     panel.classList.add('open');
     panel.scrollTop = 0;
+    navRecord();
+  }
+  // Closing deselects as well: the orange outline and the violet link
+  // highlight were both the open panel's shadow, and leaving either behind
+  // says something is picked when nothing is.
+  function closePanel() {
+    var was = panel.classList.contains('open') || selected;
+    panel.classList.remove('open');
+    document.querySelectorAll('.node.sel').forEach(function (n) { n.classList.remove('sel'); });
+    selected = null;
+    if (lset) { lset = null; paintFilter(); updateFbar(); }
+    if (was) navRecord();
   }
 
   function escText(s) {
@@ -261,8 +309,8 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function stateLabel(st) {
-    return st === 'done' ? 'savladano'
-      : st === 'ready' ? 'spremno za čitanje' : 'nije spremno';
+    return st === 'done' ? 'mastered'
+      : st === 'ready' ? 'ready to read' : 'not ready';
   }
   function testPhrase(id) {
     // This phrase becomes MODEL INPUT and seeds the session's language —
@@ -277,18 +325,18 @@
   function renderMarkUI(id, opts) {
     opts = opts || {};
     var st = stateOf(id);
-    var h = '<div class="mark-state">Stanje: ' + stateLabel(st) + '</div>';
+    var h = '<div class="mark-state">State: ' + stateLabel(st) + '</div>';
     h += st === 'done'
-      ? '<button class="mark-btn is-done" data-act="unmark">Vrati na nesavladano</button>'
-      : '<button class="mark-btn" data-act="mark">Označi kao savladano ✓</button>';
+      ? '<button class="mark-btn is-done" data-act="unmark">Unmark as mastered</button>'
+      : '<button class="mark-btn" data-act="mark">Mark as mastered ✓</button>';
     if (opts.prompt) {
       h += '<div class="mark-prompt">' +
-        '<button class="mp-close" data-act="dismiss" title="Odbaci">×</button>' +
-        '<p>Želiš li se prvo provjeriti? Otvori <code>/tutor</code> u Claude Codeu i zatraži:</p>' +
+        '<button class="mp-close" data-act="dismiss" title="Dismiss">×</button>' +
+        '<p>Want to test yourself first? Open <code>/tutor</code> in Claude Code and ask:</p>' +
         '<p><code>' + escText(testPhrase(id)) + '</code></p>' +
         '<div class="mp-actions">' +
-        '<button data-act="copy">Kopiraj</button>' +
-        '<button data-act="confirm">Samo označi</button>' +
+        '<button data-act="copy">Copy</button>' +
+        '<button data-act="confirm">Just mark it</button>' +
         '</div></div>';
     }
     if (opts.note) h += '<div class="mark-hint">' + escText(opts.note) + '</div>';
@@ -300,7 +348,7 @@
     saveProgress();
     applyStates();
     renderMarkUI(id, wasNotReady
-      ? { note: 'Napomena: preduvjeti ovog stabla još nisu savladani.' }
+      ? { note: "Note: this tree's prerequisites are not mastered yet." }
       : null);
   }
   // execCommand fallback for file:// contexts where the async clipboard
@@ -338,7 +386,7 @@
     } else if (act === 'copy') {
       var text = testPhrase(selected);
       var fb = function (ok) {
-        b.textContent = ok ? 'Kopirano ✓' : 'Kopiranje nije uspjelo';
+        b.textContent = ok ? 'Copied ✓' : 'Copying failed';
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
@@ -351,18 +399,25 @@
     }
   });
   document.getElementById('resetProg').addEventListener('click', function () {
-    if (!confirm('Poništiti sav napredak? Sve oznake savladanosti bit će obrisane.')) return;
+    if (!confirm('Reset all progress? Every mastered mark will be erased.')) return;
     done = {};
     try { localStorage.removeItem(F.progressKey); } catch (e) {}
     applyStates();
     if (selected) renderMarkUI(selected);
   });
   document.getElementById('close').addEventListener('click', function () {
-    panel.classList.remove('open');
+    closePanel();
   });
   panelBody.addEventListener('click', function (ev) {
     var f = ev.target.closest('button[data-focus]');
-    if (f) { revealStructure(); focusDefinition(f.getAttribute('data-focus')); return; }
+    if (f) {
+      // Unfolding the pane is the means, not a destination: the two land as
+      // one step, so one Back leaves the diagram AND the fold behind.
+      navQuiet++;
+      try { revealStructure(); } finally { navQuiet--; }
+      focusDefinition(f.getAttribute('data-focus'));
+      return;
+    }
     var a = ev.target.closest('a[data-open]');
     if (a) { ev.preventDefault(); openPanel(a.getAttribute('data-open')); }
   });
@@ -541,11 +596,11 @@
     placeTray();
   });
 
-  // ---- Struktura ------------------------------------------------------------
+  // ---- Structure ------------------------------------------------------------
   // Boxes come positioned from the build; the page draws the arrows between
   // them and places their KaTeX labels, since only the browser knows how
   // wide a rendered label is (as fitGroupTitle already does for SVG text).
-  var KIND_COLOR = {}, KIND_HR = {}, objById = {}, arrowById = {};
+  var KIND_COLOR = {}, KIND_LABEL = {}, objById = {}, arrowById = {};
   var sedges = [];
   // A loop is an arc 20 high and about as wide on the top side of its box:
   // small enough to stay in the gap between two rows.
@@ -620,19 +675,25 @@
 
   function setMode(next) {
     if (!S || next === mode) return;
-    unfocus();
+    // Leaving a focused diagram is part of changing arrangement, not a stop of
+    // its own, so the two are recorded as one step.
+    navQuiet++;
+    try { unfocus(); } finally { navQuiet--; }
     mode = next;
     applyArrangement(false);
     saveViewState();
+    navRecord();
   }
   function setFold(key, off) {
     if (!S || mode === 'plane' || !PANE[key].el) return;
+    if (folded[key] === off) return;
     folded[key] = off;
     // Both folded would leave an empty window; the other one opens instead.
     var other = key === 'order' ? 'structure' : 'order';
     if (off && folded[other]) folded[other] = false;
     applyArrangement(false);
     saveViewState();
+    navRecord();
   }
   // The panel's "show this definition on the canvas" button needs the structure
   // visible, whatever the reader last folded away.
@@ -694,19 +755,20 @@
   // treatment a region of the structure canvas and a section of the
   // requirements graph get, so one visual language says "these belong together"
   // at all three scales.
-  var AREA_PAD = 46, AREA_TITLE = 48;
   function drawPlaneAreas() {
     if (!pareas) return;
     if (mode !== 'plane' || !S) { pareas.innerHTML = ''; return; }
     var sz = orderSize();
     var top = Math.min(0, sTop || 0);
     var boxes = [
-      { x: 0, y: 0, w: sz.w, h: sz.h, t: 'Redoslijed', s: 'stabla i preduvjeti' },
+      { x: 0, y: 0, w: sz.w, h: sz.h, t: 'Order', s: 'trees and prerequisites' },
       { x: planeOff.x, y: planeOff.y + top, w: S.size.w, h: S.size.h - top,
-        t: 'Struktura', s: 'vrste, primjeri i strelice' },
+        t: 'Structure', s: 'kinds, instances and arrows' },
     ];
     pareas.innerHTML = boxes.map(function (b) {
-      if (!(b.w > 0 && b.h > 0)) return '';
+      // Before the graphs are measured a frame has no size yet; skip it and
+      // let the next paint draw it.
+      if (!(b.w > 0 && b.h > 0) || !isFinite(b.x) || !isFinite(b.y)) return '';
       var x = b.x - AREA_PAD, y = b.y - AREA_PAD - AREA_TITLE;
       return '<g class="parea"><rect class="parea-box" x="' + r1(x) + '" y="' + r1(y) +
         '" width="' + r1(b.w + 2 * AREA_PAD) + '" height="' + r1(b.h + 2 * AREA_PAD + AREA_TITLE) +
@@ -1221,8 +1283,8 @@
     var save = document.getElementById('lb-save');
     save.hidden = !BRIDGE.on;
     document.getElementById('lb-msg').textContent = msg || (BRIDGE.on
-      ? 'Razmještaj je promijenjen — spremi ga u ' + S.layoutFile + ' da preživi ponovnu izgradnju.'
-      : 'Razmještaj je promijenjen. Stranica otvorena s diska ne može pisati u trezor — kopiraj ili preuzmi i spremi kao ' + S.layoutFile + ' u korijen trezora.');
+      ? 'The arrangement changed — save it to ' + S.layoutFile + ' so it survives a rebuild.'
+      : 'The arrangement changed. A page opened from disk cannot write to the vault — copy or download it and save it as ' + S.layoutFile + ' in the vault root.');
     var json = document.getElementById('lb-json');
     json.value = layoutJson();
     document.getElementById('lb-dl').href =
@@ -1238,11 +1300,11 @@
           b.disabled = false;
           if (r.error) throw new Error(r.error);
           dirty = false;
-          showLayoutBar('Spremljeno u ' + S.layoutFile + ' (' + r.count + ' kutija) — ponovna izgradnja čuva ovaj razmještaj.');
-        }).catch(function (e) { b.disabled = false; showLayoutBar('Spremanje nije uspjelo: ' + e.message, true); });
+          showLayoutBar('Saved to ' + S.layoutFile + ' (' + r.count + ' boxes) — a rebuild will keep this arrangement.');
+        }).catch(function (e) { b.disabled = false; showLayoutBar('Saving failed: ' + e.message, true); });
       } else if (b.id === 'lb-copy') {
         var text = layoutJson();
-        var done = function (ok) { b.textContent = ok ? 'Kopirano ✓' : 'Kopiranje nije uspjelo'; };
+        var done = function (ok) { b.textContent = ok ? 'Copied ✓' : 'Copying failed'; };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(legacyCopy(text)); });
         } else { done(legacyCopy(text)); }
@@ -1270,7 +1332,7 @@
   // --- one level lower: a kind's defining diagram on the canvas ------------
   // The panel already typesets the diagram; this shows it in place, with the
   // rest of the canvas out of the way and one way back.
-  var defFocus = { on: false, view: null };
+  var defFocus = { on: false, id: null, view: null };
   function focusDefinition(id) {
     var o = objById[id];
     if (!o || !o.data || !o.data.length) return;
@@ -1283,6 +1345,7 @@
     var view = sview();
     if (!defFocus.on) defFocus.view = { x: view.x, y: view.y, k: view.k };
     defFocus.on = true;
+    defFocus.id = id;
     document.body.classList.add('sfocus');
     document.querySelectorAll('#slayer .sbox').forEach(function (b) {
       b.classList.toggle('off', !keep[b.getAttribute('data-box')]);
@@ -1302,7 +1365,7 @@
     var bar = document.getElementById('focusbar');
     bar.hidden = false;
     bar.style.top = barTop() + 'px';
-    document.getElementById('fb-what').textContent = 'Definicija vrste: ' + objTitle(id);
+    document.getElementById('fb-what').textContent = 'Defining diagram: ' + objTitle(id);
     // Fit the diagram: its boxes' bounding box, with room for the labels.
     var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
     Object.keys(keep).forEach(function (k) {
@@ -1317,24 +1380,48 @@
     view.x = (r.width - (x2 - x1) * view.k) / 2 - (x1 + ox) * view.k;
     view.y = (r.height - (y2 - y1) * view.k) / 2 - (y1 + oy) * view.k;
     applyView();
+    navRecord();
   }
-  function unfocus() {
+  function unfocus(opts) {
     if (!defFocus.on) return;
     defFocus.on = false;
+    defFocus.id = null;
     document.body.classList.remove('sfocus');
     document.querySelectorAll('#slayer .off, #slabels .off').forEach(function (el) { el.classList.remove('off'); });
     document.getElementById('focusbar').hidden = true;
-    if (defFocus.view) {
+    // "Back to the whole graph" means the graph as it was, so the bar's own way
+    // out restores the pan and zoom it took away. Leaving BY clicking something
+    // faded does not: the box the reader just aimed at has to stay under the
+    // cursor that chose it.
+    if (defFocus.view && !(opts && opts.keepView)) {
       var view = sview();
       view.x = defFocus.view.x; view.y = defFocus.view.y; view.k = defFocus.view.k;
       applyView();
     }
+    navRecord();
+  }
+  // A click on something the focused diagram faded out. The diagram is a way of
+  // looking, never a lock: faded material answers a click here exactly as
+  // filtered-out material does — it comes back, and what was clicked opens.
+  // Recorded with the panel as one step, the way leaving a diagram always has
+  // been, so one Back returns both the diagram and the tree that was open.
+  function leaveFocusIfOff(el) {
+    if (!defFocus.on || !el.closest('.off')) return;
+    navQuiet++;
+    try { unfocus({ keepView: true }); } finally { navQuiet--; }
   }
   if (document.getElementById('focusbar')) {
-    document.getElementById('fb-back').addEventListener('click', unfocus);
+    document.getElementById('fb-back').addEventListener('click', function () { unfocus(); });
   }
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') unfocus();
+    if (ev.key !== 'Escape') return;
+    // One key, the innermost way out first: the focused diagram, then the panel.
+    if (defFocus.on) { unfocus(); return; }
+    // Escape inside a field belongs to the field. A half-written question in
+    // the ask box must not cost the reader the panel it is being written in.
+    var t = ev.target;
+    if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
+    closePanel();
   });
 
   // --- the panel's cross-tree sections -------------------------------------
@@ -1349,7 +1436,7 @@
     return S.kinds.map(function (k) {
       var list = arrows.filter(function (a) { return a.kind === k.id; });
       if (!list.length) return '';
-      return '<div class="skind"><span class="kind-chip" style="--c:' + k.color + '">' + escText(k.hr) + '</span></div>' +
+      return '<div class="skind"><span class="kind-chip" style="--c:' + k.color + '">' + escText(k.label) + '</span></div>' +
         list.map(function (a) { return arrowRow(a, dir); }).join('');
     }).join('');
   }
@@ -1358,16 +1445,16 @@
     list.forEach(function (t) {
       if (seen[t.id]) return;
       seen[t.id] = true;
-      (t.fields && t.fields.length ? t.fields : ['ostalo']).forEach(function (f) {
+      (t.fields && t.fields.length ? t.fields : ['other']).forEach(function (f) {
         if (!byField[f]) { byField[f] = []; order.push(f); }
         byField[f].push(t);
       });
     });
-    order.sort(function (a, b) { return a === 'ostalo' ? 1 : b === 'ostalo' ? -1 : a.localeCompare(b, 'hr'); });
+    order.sort(function (a, b) { return a === 'other' ? 1 : b === 'other' ? -1 : a.localeCompare(b, 'en'); });
     return order.map(function (f) {
       return '<div class="sfield">' + escText(f) + '</div>' + byField[f].map(function (t) {
-        var via = t.via ? 'vrijedi preko poopćenja: ' + t.via
-          : t.ofKind ? 'teorem o vrsti: ' + t.ofKind : '';
+        var via = t.via ? 'holds via the generalization: ' + t.via
+          : t.ofKind ? 'theorem about the kind: ' + t.ofKind : '';
         return '<a href="#" class="srow" data-open="' + escText(t.id) + '">' + escText(t.title) +
           (via ? '<span class="srow-via">' + escText(via) + '</span>' : '') + '</a>';
       }).join('');
@@ -1392,18 +1479,18 @@
     var kind = S.arrows.filter(function (a) { return a.from === o.of; });
     var out = S.arrows.filter(function (a) { return a.from === id; });
     var inn = S.arrows.filter(function (a) { return a.to === id && a.from !== id; });
-    var h = '<h3 class="ssec">Strelice vrste ' + escText(objTitle(o.of)) + ' (' + kind.length + ')</h3>' +
+    var h = '<h3 class="ssec">Arrows of the kind ' + escText(objTitle(o.of)) + ' (' + kind.length + ')</h3>' +
       (kind.length
-        ? '<p class="smuted">Vrijede za svaku strukturu te vrste, pa i za ovu.</p>' + kindGroups(kind, 'out')
-        : '<p class="smuted">Vrsta nema svojih strelica.</p>');
-    h += '<h3 class="ssec">Preslikavanja iz ovog primjera (' + out.length + ')</h3>' +
-      (out.length ? kindGroups(out, 'out') : '<p class="smuted">Nema preslikavanja iz ovog primjera.</p>');
+        ? '<p class="smuted">They hold for every structure of that kind, this one included.</p>' + kindGroups(kind, 'out')
+        : '<p class="smuted">The kind has no arrows of its own.</p>');
+    h += '<h3 class="ssec">Maps out of this instance (' + out.length + ')</h3>' +
+      (out.length ? kindGroups(out, 'out') : '<p class="smuted">No maps out of this instance.</p>');
     if (inn.length) {
-      h += '<h3 class="ssec">Preslikavanja u ovaj primjer (' + inn.length + ')</h3>' + kindGroups(inn, 'in');
+      h += '<h3 class="ssec">Maps into this instance (' + inn.length + ')</h3>' + kindGroups(inn, 'in');
     }
     var defines = S.objects.filter(function (x) { return x.data && x.data.indexOf(id) >= 0; });
     if (defines.length) {
-      h += '<h3 class="ssec">Sudjeluje u definiciji (' + defines.length + ')</h3>' +
+      h += '<h3 class="ssec">Part of the definition of (' + defines.length + ')</h3>' +
         defines.map(function (x) {
           return '<a href="#" class="srow" data-open="' + escText(x.id) + '">' + escText(x.title) + '</a>';
         }).join('');
@@ -1412,8 +1499,8 @@
     (S.theorems[o.of] || []).forEach(function (t) {
       thms.push({ id: t.id, title: t.title, fields: t.fields, ofKind: objTitle(o.of) });
     });
-    h += '<h3 class="ssec">Teoremi (' + countUnique(thms) + ')</h3>' +
-      (thms.length ? theoremGroups(thms) : '<p class="smuted">Nijedan teorem ne govori o ovom primjeru.</p>');
+    h += '<h3 class="ssec">Theorems (' + countUnique(thms) + ')</h3>' +
+      (thms.length ? theoremGroups(thms) : '<p class="smuted">No theorem is about this instance.</p>');
     return h;
   }
   function structureSections(id) {
@@ -1424,16 +1511,16 @@
     if (objById[id]) {
       var out = S.arrows.filter(function (a) { return a.from === id && a.kind !== 'instance'; });
       var inn = S.arrows.filter(function (a) { return a.to === id && a.kind !== 'instance'; });
-      h += '<h3 class="ssec">Strelice iz objekta (' + out.length + ')</h3>' +
-        (out.length ? kindGroups(out, 'out') : '<p class="smuted">Nema strelica iz ovog objekta.</p>');
+      h += '<h3 class="ssec">Arrows out of this object (' + out.length + ')</h3>' +
+        (out.length ? kindGroups(out, 'out') : '<p class="smuted">No arrows out of this object.</p>');
       // A typed object is another box of its type's kind, so what can be
       // built from that kind can be built from it. The type's own maps (hom)
       // are particular arrows between particular boxes and do not carry over.
       var type = objById[id].type;
       if (type && objById[type]) {
         var tout = S.arrows.filter(function (a) { return a.from === type && a.kind !== 'instance' && a.kind !== 'hom'; });
-        h += '<h3 class="ssec">Strelice tipa (' + tout.length + ')</h3>' +
-          (tout.length ? kindGroups(tout, 'out') : '<p class="smuted">Tip nema svojih strelica.</p>');
+        h += '<h3 class="ssec">Arrows of the type (' + tout.length + ')</h3>' +
+          (tout.length ? kindGroups(tout, 'out') : '<p class="smuted">The type has no arrows of its own.</p>');
       }
       // Examples travel up a generalizes arrow: an example of the special
       // kind is an example of the general one.
@@ -1442,10 +1529,10 @@
         if (a.kind !== 'generalizes' || a.to !== id) return;
         (S.instances[a.from] || []).forEach(function (i) { inst.push({ i: i, via: objTitle(a.from) }); });
       });
-      h += '<h3 class="ssec">Primjeri (' + inst.length + ')</h3>' + (inst.length ? inst.map(function (x) {
+      h += '<h3 class="ssec">Instances (' + inst.length + ')</h3>' + (inst.length ? inst.map(function (x) {
         return '<div class="sinst"><a href="#" class="srow" data-open="' + escText(x.i.id) + '">' + escText(x.i.title) +
-          (x.via ? '<span class="srow-via">preko poopćenja iz: ' + escText(x.via) + '</span>' : '') + '</a>' + valuesDl(x.i) + '</div>';
-      }).join('') : '<p class="smuted">Nema primjera.</p>');
+          (x.via ? '<span class="srow-via">via the generalization from: ' + escText(x.via) + '</span>' : '') + '</a>' + valuesDl(x.i) + '</div>';
+      }).join('') : '<p class="smuted">No instances.</p>');
       // Theorems about the object or any arrow touching it; a theorem about
       // the general kind holds for the special one, so it travels down.
       var thms = (S.theorems[id] || []).slice();
@@ -1454,10 +1541,10 @@
         if (a.kind !== 'generalizes' || a.from !== id) return;
         (S.theorems[a.to] || []).forEach(function (t) { thms.push({ id: t.id, title: t.title, fields: t.fields, via: objTitle(a.to) }); });
       });
-      h += '<h3 class="ssec">Teoremi (' + countUnique(thms) + ')</h3>' +
-        (thms.length ? theoremGroups(thms) : '<p class="smuted">Nijedan teorem ne govori o ovom objektu.</p>');
-      h += '<h3 class="ssec">Strelice u objekt (' + inn.length + ')</h3>' +
-        (inn.length ? kindGroups(inn, 'in') : '<p class="smuted">Nema strelica u ovaj objekt.</p>');
+      h += '<h3 class="ssec">Theorems (' + countUnique(thms) + ')</h3>' +
+        (thms.length ? theoremGroups(thms) : '<p class="smuted">No theorem is about this object.</p>');
+      h += '<h3 class="ssec">Arrows into this object (' + inn.length + ')</h3>' +
+        (inn.length ? kindGroups(inn, 'in') : '<p class="smuted">No arrows into this object.</p>');
       return h;
     }
     var a = arrowById[id];
@@ -1465,19 +1552,19 @@
     if (a.kind !== 'instance') {
       var ex = (S.instances[a.from] || []).filter(function (i) { return i.values_html[id]; });
       if (ex.length) {
-        h += '<h3 class="ssec">Na primjerima</h3>' + ex.map(function (i) {
+        h += '<h3 class="ssec">On instances</h3>' + ex.map(function (i) {
           return '<div class="sinst"><a href="#" class="srow" data-open="' + escText(i.id) + '">' + escText(i.title) + '</a>' +
             '<div class="sval">' + i.values_html[id] + '</div></div>';
         }).join('');
       }
     }
     var th = S.theorems[id] || [];
-    if (th.length) h += '<h3 class="ssec">Teoremi (' + th.length + ')</h3>' + theoremGroups(th);
+    if (th.length) h += '<h3 class="ssec">Theorems (' + th.length + ')</h3>' + theoremGroups(th);
     return h;
   }
 
   if (S) {
-    S.kinds.forEach(function (k) { KIND_COLOR[k.id] = k.color; KIND_HR[k.id] = k.hr; });
+    S.kinds.forEach(function (k) { KIND_COLOR[k.id] = k.color; KIND_LABEL[k.id] = k.label; });
     S.objects.forEach(function (o) { objById[o.id] = o; });
     S.arrows.forEach(function (a) { arrowById[a.id] = a; });
     basePos = snapshot();
@@ -1494,11 +1581,15 @@
     slayer.addEventListener('click', function (ev) {
       if (dragged) { dragged = false; return; }
       var n = ev.target.closest('.node, .inst, .sedge');
-      if (n) openPanel(n.getAttribute('data-id'));
+      if (!n) return;
+      leaveFocusIfOff(n);
+      openPanel(n.getAttribute('data-id'), { toggle: true });
     });
     slabels.addEventListener('click', function (ev) {
       var l = ev.target.closest('.slabel');
-      if (l) openPanel(l.getAttribute('data-open'));
+      if (!l) return;
+      leaveFocusIfOff(l);
+      openPanel(l.getAttribute('data-open'), { toggle: true });
     });
   }
 
@@ -1581,20 +1672,26 @@
       t.classList.toggle('fdim', !on && !hid);
       t.classList.toggle('fhide', !on && hid);
     });
+    // The frames last, and they obey `hide` like everything above them: a frame
+    // fades while dimming, because knowing WHERE on the map the lit things sit
+    // is most of the value when only two boxes survive — but `hide` is the mode
+    // that means gone, and six empty outlines on an otherwise empty canvas is
+    // not what it promised.
     document.querySelectorAll('#sregions .sregion').forEach(function (r) {
       var id = r.getAttribute('data-region');
       var any = !fset || S.objects.some(function (o) {
         return (o.region || '') === id && fLit(o.id);
       });
-      r.classList.toggle('fdim', !any);
+      r.classList.toggle('fdim', !any && !hid);
+      r.classList.toggle('fhide', !any && hid);
     });
   }
 
   function countText(c) {
     var parts = [];
-    if (fgraph && fgraph.objects.length) parts.push('kutije ' + c.objects);
-    if (fgraph && fgraph.arrows.length) parts.push('strelice ' + c.arrows);
-    parts.push('stabla ' + c.trees);
+    if (fgraph && fgraph.objects.length) parts.push('boxes ' + c.objects);
+    if (fgraph && fgraph.arrows.length) parts.push('arrows ' + c.arrows);
+    parts.push('trees ' + c.trees);
     return parts.join(' · ');
   }
   // The count and the description are two fields, because the count is the one
@@ -1609,8 +1706,15 @@
       var c = fexpr && fcount ? fcount : {
         objects: fgraph.objects.length, arrows: fgraph.arrows.length, trees: fgraph.trees.length,
       };
-      cnt.textContent = countText(c) + (lset ? ' · povezano ' + (Object.keys(lset).length - 1) : '');
+      cnt.textContent = countText(c) + (lset ? ' · linked ' + (Object.keys(lset).length - 1) : '');
       cnt.className = fexpr ? 'lit' : '';
+      // A pair of inverse arrows is drawn as ONE edge, so the canvas can show
+      // fewer arrows than this number. Said on the count itself, where the
+      // question gets asked, rather than in the footer, where it would be noise
+      // for every reader who never counts.
+      if (fgraph.arrows.length) {
+        cnt.title = 'An inverse pair shares one drawn arrow, so the canvas can show fewer arrows than the count.';
+      }
     }
     el.textContent = msg || (fexpr ? FF.describeExpr(fexpr, fgraph) : '');
     el.className = msg ? (cls || '') : (fexpr ? 'lit' : '');
@@ -1622,7 +1726,7 @@
     if (!fnone) return;
     fnone.hidden = false;
     fnone.style.top = barTop() + 'px';
-    fnone.textContent = 'Ništa ne odgovara filtru (' + what + ') — prikaz je ostavljen nedirnut.';
+    fnone.textContent = 'Nothing matches the filter (' + what + ') — the view is left untouched.';
   }
   function hideNoMatch() { if (fnone) fnone.hidden = true; }
 
@@ -1634,7 +1738,7 @@
     var r = FF.evaluate(expr, fgraph);
     if (r.fatal) {
       var first = r.problems.filter(function (p) { return p.fatal; })[0];
-      updateFbar('Filtar: ' + FF.problemText(first), 'warn');
+      updateFbar('Filter: ' + FF.problemText(first), 'warn');
       return r;
     }
     if (!r.count.total) {
@@ -1648,7 +1752,7 @@
     if (fHide) relayout(); else paintFilter();
     updateFbar();
     markChips();
-    if (!opts.quiet) writeHash();
+    if (!opts.quiet) navRecord();
     return r;
   }
   function clearFilter(opts) {
@@ -1657,16 +1761,17 @@
     if (fHide) relayout(); else paintFilter();
     updateFbar();
     markChips();
-    if (!(opts && opts.quiet)) writeHash();
+    if (!(opts && opts.quiet)) navRecord();
   }
-  // `quiet` is for the hash reader: writing the hash back before the filter
-  // from that same hash has been applied would drop it from the address bar.
+  // `quiet` is for the hash reader and for a replayed state: recording a step
+  // in the middle of arriving at one would record the half-built state.
   function setHide(on, quiet) {
+    if (fHide === !!on) return;
     fHide = !!on;
     var cb = document.getElementById('f-hide');
     if (cb) cb.checked = fHide;
     relayout();
-    if (!quiet) writeHash();
+    if (!quiet) navRecord();
   }
 
   // The cross-link, both ways, out of one symmetric predicate: picking a tree
@@ -1701,7 +1806,7 @@
   var fchips = [];
   function buildTray() {
     if (!ftray || !FF || !fgraph) return;
-    fchips = FF.chipsFor(fgraph, { kinds: KIND_HR, taxa: F.taxa || {} });
+    fchips = FF.chipsFor(fgraph, { kinds: KIND_LABEL, taxa: F.taxa || {} });
     var groups = [], seen = {};
     fchips.forEach(function (c) {
       if (!seen[c.group]) { seen[c.group] = []; groups.push(c.group); }
@@ -1712,13 +1817,13 @@
         return '<button class="fchip" data-chip="' + fchips.indexOf(c) + '">' + escText(c.label) + '</button>';
       }).join('');
     }).join('');
-    h += '<h4>Vlastiti izraz (JSON)</h4>' +
+    h += '<h4>Your own expression (JSON)</h4>' +
       '<textarea id="f-json" spellcheck="false" placeholder=\'{"tied-to": "obj-valuation"}\'></textarea>' +
-      '<div class="frow"><button id="f-run">Primijeni</button><button id="f-clear2">Očisti</button>' +
+      '<div class="frow"><button id="f-run">Apply</button><button id="f-clear2">Clear</button>' +
       '<span class="fhint" id="f-msg"></span></div>' +
-      '<div class="frow"><span class="fhint">Predikati: ' +
+      '<div class="frow"><span class="fhint">Predicates: ' +
       FF.PREDICATES.map(function (p) { return '<code>' + escText(p.name) + '</code>'; }).join(' ') +
-      ' · spoji ih s <code>and</code>, <code>or</code>, <code>not</code> · isti izraz ide i u adresu stranice, kao <code>#filter=…</code></span></div>';
+      ' · join them with <code>and</code>, <code>or</code>, <code>not</code> · the same expression goes in the page address, as <code>#filter=…</code></span></div>';
     ftray.innerHTML = h;
     ftray.addEventListener('click', function (ev) {
       var chip = ev.target.closest('.fchip');
@@ -1756,7 +1861,7 @@
     var r = applyFilter(p.expr);
     msg.textContent = r && r.problems.length
       ? r.problems.map(FF.problemText).join(' · ')
-      : (r ? 'Pogodaka: ' + r.count.total : '');
+      : (r ? 'Matches: ' + r.count.total : '');
   }
   if (document.getElementById('f-open')) {
     document.getElementById('f-open').addEventListener('click', function () {
@@ -1795,50 +1900,186 @@
     });
     return out;
   }
-  var writingHash = false;
-  function writeHash() {
-    var parts = [];
-    if (fexpr) parts.push(FF.HASH_KEY + '=' + encodeURIComponent(JSON.stringify(fexpr)));
-    if (fHide) parts.push('hide=1');
-    if (S && mode === 'plane') parts.push('mode=plane');
-    var h = parts.length ? '#' + parts.join('&') : '';
-    if (h === location.hash || (!h && !location.hash)) return;
-    writingHash = true;
-    try {
-      // replaceState keeps the back button meaning what it meant; on a file://
-      // page a browser may refuse it, and then the URL simply stays behind.
-      history.replaceState(null, '', location.pathname + location.search + h);
-    } catch (e) { /* no history write: the page is still filtered */ }
-    writingHash = false;
-  }
+  // Reading the address is one function, and it never records a step of its
+  // own: whoever asked for the read says afterwards whether arriving here was
+  // navigation (a pasted link, a traversal) or merely the page opening.
   function readHash() {
-    var p = hashParts();
-    if (p.mode && S) {
-      mode = p.mode === 'plane' ? 'plane' : 'split';
-      applyArrangement(false);
-    }
-    if (p.pane === 'order' || p.pane === 'structure') {
-      setFold(p.pane === 'order' ? 'structure' : 'order', true);
-    }
-    if (p.hide === '1' && !fHide) setHide(true, true);
-    if (p[FF.HASH_KEY]) {
-      var parsed = FF.parseExpr(p[FF.HASH_KEY]);
-      if (!parsed.expr) updateFbar('Filtar iz adrese: ' + FF.problemText(parsed.problems[0]), 'warn');
-      else {
-        var ta = document.getElementById('f-json');
-        if (ta) ta.value = JSON.stringify(parsed.expr);
-        applyFilter(parsed.expr, { quiet: true });
+    navQuiet++;
+    try {
+      var p = hashParts();
+      if (p.mode && S) {
+        mode = p.mode === 'plane' ? 'plane' : 'split';
+        applyArrangement(false);
       }
-    } else if (fexpr) clearFilter({ quiet: true });
+      if (S && mode === 'split') {
+        var off = p.pane === 'order' ? 'structure' : p.pane === 'structure' ? 'order' : null;
+        setFold('order', off === 'order');
+        setFold('structure', off === 'structure');
+      }
+      if ((p.hide === '1') !== fHide) setHide(p.hide === '1', true);
+      if (p[FF.HASH_KEY]) {
+        var parsed = FF.parseExpr(p[FF.HASH_KEY]);
+        if (!parsed.expr) updateFbar('Filter from the address: ' + FF.problemText(parsed.problems[0]), 'warn');
+        else {
+          var ta = document.getElementById('f-json');
+          if (ta) ta.value = JSON.stringify(parsed.expr);
+          applyFilter(parsed.expr, { quiet: true });
+        }
+      } else if (fexpr) {
+        var ta2 = document.getElementById('f-json');
+        if (ta2) ta2.value = '';
+        clearFilter({ quiet: true });
+      }
+      if (p.tree && F.nodes[p.tree]) openPanel(p.tree);
+      else closePanel();
+      if (p.focus && S && objById[p.focus]) { revealStructure(); focusDefinition(p.focus); }
+      else unfocus();
+    } finally { navQuiet--; }
   }
-  window.addEventListener('hashchange', function () {
-    if (!writingHash) readHash();
+
+  // ---- a step back: the viewer's own history -------------------------------
+  // WHAT COUNTS AS ONE STEP. Six things, and they are exactly the ones that
+  // change what the page is SHOWING rather than how it is being looked at: the
+  // tree open in the panel, the filter expression, the `hide` switch, the
+  // arrangement, which pane is folded, and the focused definition diagram. The
+  // link highlight is not among them because it is not independent — it is
+  // whatever the open tree's `about` names, so it follows the tree for free.
+  //
+  // Deliberately NOT steps: panning, zooming, the search box, the proof and
+  // exercise toggles, expanding a section, dragging a box, marking a tree
+  // mastered. Those are either continuous, or a way of looking at one state,
+  // or an edit — and a Back button that undid a reading mark would be a
+  // different and much more dangerous promise.
+  //
+  // A step that lands on the state we are already in is dropped, so clicking
+  // the same chip twice, or re-picking the open tree, leaves one entry.
+  //
+  // The browser's own Back walks the same list: each step is pushed as a
+  // history entry carrying its sequence number and popstate looks that number
+  // up, which is why the address bar and the bar's own button can never
+  // disagree. A file:// page may refuse pushState outright — then navPush goes
+  // false, the array stays the truth, and the button in the bar still steps.
+  function navState() {
+    return {
+      tree: panel.classList.contains('open') && selected ? selected : null,
+      filter: fexpr || null,
+      hide: !!fHide,
+      mode: mode,
+      fold: folded.order ? 'order' : folded.structure ? 'structure' : null,
+      focus: defFocus.on ? defFocus.id : null,
+    };
+  }
+  function sameState(a, b) {
+    return !!a && !!b && a.tree === b.tree && a.hide === b.hide && a.mode === b.mode &&
+      a.fold === b.fold && a.focus === b.focus && sameExpr(a.filter, b.filter);
+  }
+  function navHash(st) {
+    var parts = [];
+    if (st.filter) parts.push(FF.HASH_KEY + '=' + encodeURIComponent(JSON.stringify(st.filter)));
+    if (st.hide) parts.push('hide=1');
+    if (S && st.mode === 'plane') parts.push('mode=plane');
+    if (S && st.fold) parts.push('pane=' + (st.fold === 'order' ? 'structure' : 'order'));
+    if (st.tree) parts.push('tree=' + encodeURIComponent(st.tree));
+    if (st.focus) parts.push('focus=' + encodeURIComponent(st.focus));
+    return parts.length ? '#' + parts.join('&') : '';
+  }
+  function navUrl(st, push) {
+    var url = location.pathname + location.search + navHash(st);
+    try {
+      if (push) history.pushState({ forestSeq: st.seq }, '', url);
+      else history.replaceState({ forestSeq: st.seq }, '', url);
+    } catch (e) {
+      // No history writing here (some browsers on file://): the trail still
+      // works, it simply stops showing in the address bar.
+      navPush = false;
+    }
+  }
+  function navButtons() {
+    var b = document.getElementById('nav-back'), f = document.getElementById('nav-fwd');
+    if (b) b.disabled = navIdx <= 0;
+    if (f) f.disabled = navIdx < 0 || navIdx >= navLine.length - 1;
+  }
+  function navRecord() {
+    if (navQuiet) return;
+    var st = navState();
+    if (sameState(st, navLine[navIdx])) return;
+    st.seq = ++navSeq;
+    // Stepping back and then somewhere new drops what was ahead, as a browser
+    // does: the trail is where the reader has been, not a tree of might-haves.
+    navLine = navLine.slice(0, navIdx + 1);
+    navLine.push(st);
+    navIdx = navLine.length - 1;
+    navUrl(st, navIdx > 0 && navPush);
+    navButtons();
+  }
+  // Putting the page INTO a recorded state. Every branch is guarded by a
+  // comparison, so replaying a state only touches what actually differs — and
+  // nothing in here records, or stepping back would be a step forward.
+  function navApply(st) {
+    navQuiet++;
+    try {
+      if (S && st.mode !== mode) { mode = st.mode; applyArrangement(false); }
+      if (S && mode === 'split') {
+        setFold('order', st.fold === 'order');
+        setFold('structure', st.fold === 'structure');
+      }
+      if (!sameExpr(st.filter, fexpr)) {
+        var ta = document.getElementById('f-json');
+        if (ta) ta.value = st.filter ? JSON.stringify(st.filter) : '';
+        if (st.filter) applyFilter(st.filter, { quiet: true });
+        else clearFilter({ quiet: true });
+      }
+      if (!!st.hide !== fHide) setHide(st.hide, true);
+      if (st.focus) { if (st.focus !== defFocus.id) { revealStructure(); focusDefinition(st.focus); } }
+      else unfocus();
+      // Re-rendering the panel it already shows would only make it flicker.
+      if (st.tree) { if (st.tree !== selected || !panel.classList.contains('open')) openPanel(st.tree); }
+      else closePanel();
+    } finally { navQuiet--; }
+    navButtons();
+  }
+  function navTo(i) {
+    if (i < 0 || i >= navLine.length) return;
+    navIdx = i;
+    navApply(navLine[i]);
+    navUrl(navLine[i], false);
+  }
+  // The bar's button moves the BROWSER's pointer when the browser has one, so
+  // the two never drift apart; popstate then lands in navTo.
+  function navGo(d) {
+    var i = navIdx + d;
+    if (i < 0 || i >= navLine.length) return;
+    if (navPush) history.go(d);
+    else navTo(i);
+  }
+  window.addEventListener('popstate', function (ev) {
+    var seq = ev.state && ev.state.forestSeq;
+    for (var i = 0; i < navLine.length; i++) {
+      if (navLine[i].seq === seq) { navIdx = i; navApply(navLine[i]); return; }
+    }
+    // An entry this page never wrote — a hand-edited address, or history from
+    // before a reload. Read it, and record where it put us.
+    readHash();
+    navRecord();
   });
+  window.addEventListener('hashchange', function () {
+    // Our own pushes and traversals have already left the page in this state;
+    // only an address somebody typed is news.
+    if (navIdx >= 0 && location.hash === navHash(navLine[navIdx])) return;
+    readHash();
+    navRecord();
+  });
+  if (document.getElementById('nav-back')) {
+    document.getElementById('nav-back').addEventListener('click', function () { navGo(-1); });
+    document.getElementById('nav-fwd').addEventListener('click', function () { navGo(1); });
+  }
 
   if (FF && fgraph) {
     buildTray();
     updateFbar();
-    readHash();
+    // The address is read at the very bottom of this file, not here: it can now
+    // open a tree, and a tree's panel wants the diagram strip and the bridge,
+    // which are built below.
     // A tiny, documented surface for whoever drives this from outside — today a
     // skill opening the page, later the natural-language layer. `describe()` is
     // the important half: it hands back the grammar AND this vault's own
@@ -1862,6 +2103,9 @@
       hide: function (on) { setHide(on); return { hide: fHide }; },
       link: function (id) { setLink(id); return { linked: lset ? Object.keys(lset).sort() : [] }; },
       select: function (id) { if (F.nodes[id]) openPanel(id); return { selected: selected }; },
+      close: function () { closePanel(); return { selected: selected }; },
+      back: function () { navGo(-1); return { at: navIdx, depth: navLine.length }; },
+      forward: function () { navGo(1); return { at: navIdx, depth: navLine.length }; },
       arrangement: function (next) {
         if (next === 'plane' || next === 'split') setMode(next);
         return { mode: mode, folded: { order: folded.order, structure: folded.structure }, split: split };
@@ -1873,16 +2117,21 @@
           count: fcount,
           selected: selected,
           linked: lset ? Object.keys(lset).sort() : [],
+          focus: defFocus.on ? defFocus.id : null,
+          // The trail, newest last, with `at` saying where in it the reader
+          // stands: enough for an outside caller to know whether back() has
+          // anywhere to go, and what it would go to.
+          history: { at: navIdx, depth: navLine.length, states: navLine.map(navHash) },
           arrangement: { mode: mode, split: split, folded: { order: folded.order, structure: folded.structure } },
           chips: fchips.map(function (c) { return { label: c.label, group: c.group, expr: c.expr }; }),
-          hash: 'otvori stranicu s #filter=<urlencoded JSON>[&hide=1][&mode=plane][&pane=structure]',
+          hash: 'open the page with #filter=<urlencoded JSON>[&hide=1][&mode=plane][&pane=structure][&tree=<id>][&focus=<obj- id>]',
           grammar: FF.vocabulary(fgraph),
         };
       },
     };
   }
 
-  // ---- Dijagrami: the bottom strip ----------------------------------------
+  // ---- Diagrams: the bottom strip -----------------------------------------
   // Every commutative diagram in the picked tree's body, then in the trees
   // about it, one tab each. Absent when no tree in the vault draws one.
   var strip = document.getElementById('strip');
@@ -1912,8 +2161,8 @@
     strip.classList.toggle('empty', !stripFigs.length);
     document.getElementById('strip-count').textContent = stripFigs.length ? '(' + stripFigs.length + ')' : '';
     document.getElementById('strip-tabs').innerHTML = stripFigs.map(function (fg, i) {
-      return '<button class="strip-tab" data-i="' + i + '"' + (fg.src ? ' title="iz: ' + escText(fg.src) + '"' : '') + '>' +
-        escText(fg.title || ('Dijagram ' + (i + 1))) + '</button>';
+      return '<button class="strip-tab" data-i="' + i + '"' + (fg.src ? ' title="from: ' + escText(fg.src) + '"' : '') + '>' +
+        escText(fg.title || ('Diagram ' + (i + 1))) + '</button>';
     }).join('');
     showFigure(0);
   }
@@ -1921,7 +2170,7 @@
     document.getElementById('strip-toggle').addEventListener('click', function () {
       if (strip.classList.contains('empty')) return;
       strip.classList.toggle('collapsed');
-      this.firstChild.textContent = (strip.classList.contains('collapsed') ? '▸' : '▾') + ' Dijagrami ';
+      this.firstChild.textContent = (strip.classList.contains('collapsed') ? '▸' : '▾') + ' Diagrams ';
     });
     document.getElementById('strip-tabs').addEventListener('click', function (ev) {
       var b = ev.target.closest('.strip-tab');
@@ -1941,7 +2190,7 @@
     var tok = new URLSearchParams(location.search).get('t');
     return { on: location.protocol === 'http:' && !!tok, tok: tok };
   })();
-  var ASK_WAIT = 'Čekam Claude Code — pokreni /ask --watch u trezoru.';
+  var ASK_WAIT = 'Waiting for Claude Code — run /ask --watch in the vault.';
   var askBox = document.createElement('div');
   askBox.id = 'panel-ask';
   var askTree = null, askSelection = '', askLastId = null;
@@ -1958,9 +2207,9 @@
   function mountAsk(id) {
     askTree = id; askSelection = ''; askLastId = null;
     askBox.innerHTML =
-      '<textarea id="ask-q" placeholder="Označi dio teksta gore i pitaj — ili samo pitaj o ovom stablu."></textarea>' +
+      '<textarea id="ask-q" placeholder="Select a passage above and ask — or just ask about this tree."></textarea>' +
       '<div class="ask-sel" id="ask-sel"></div>' +
-      '<div class="ask-row"><button class="primary" id="ask-send">Pitaj</button>' +
+      '<div class="ask-row"><button class="primary" id="ask-send">Ask</button>' +
       '<span class="ask-status" id="ask-status"></span></div>' +
       '<div class="ask-answer" id="ask-answer" hidden></div>' +
       '<div class="ask-actions" id="ask-actions" hidden></div>';
@@ -1980,7 +2229,7 @@
     if (!anchor || !panelBody.contains(anchor) || askBox.contains(anchor)) return;
     askSelection = txt.slice(0, 4000);
     var el = document.getElementById('ask-sel');
-    if (el) el.textContent = '„' + (txt.length > 160 ? txt.slice(0, 160) + '…' : txt) + '”';
+    if (el) el.textContent = '\u201c' + (txt.length > 160 ? txt.slice(0, 160) + '…' : txt) + '\u201d';
   });
 
   function setStatus(msg, err) {
@@ -1992,18 +2241,18 @@
 
   function sendAsk(kind, replyTo) {
     var q = (document.getElementById('ask-q') || {}).value || '';
-    if (kind === 'ask' && !q.trim()) { setStatus('Napiši pitanje.', true); return; }
+    if (kind === 'ask' && !q.trim()) { setStatus('Write a question.', true); return; }
     var btns = askBox.querySelectorAll('button');
     btns.forEach(function (b) { b.disabled = true; });
-    setStatus('Šaljem…');
+    setStatus('Sending…');
     api('/api/ask', { method: 'POST', body: { kind: kind, tree: askTree, selection: askSelection, question: q, reply_to: replyTo || null } })
       .then(function (r) {
         if (r.error) throw new Error(r.error);
         askLastId = r.id;
-        setStatus(r.watcher.alive ? 'Razmišljam…' : ASK_WAIT);
+        setStatus(r.watcher.alive ? 'Thinking…' : ASK_WAIT);
         listen(r.id, kind);
       })
-      .catch(function (e) { setStatus('Greška: ' + e.message, true); btns.forEach(function (b) { b.disabled = false; }); });
+      .catch(function (e) { setStatus('Error: ' + e.message, true); btns.forEach(function (b) { b.disabled = false; }); });
   }
 
   // One SSE stream per request: status.json as it changes, then the rendered
@@ -2017,14 +2266,14 @@
     es.addEventListener('status', function (ev) {
       var st = JSON.parse(ev.data);
       if (st.show) applyShow(st.show);
-      if (st.state === 'error') h.status('Greška: ' + (st.message || 'nepoznata'), true);
+      if (st.state === 'error') h.status('Error: ' + (st.message || 'unknown'), true);
       else if (st.message) h.status(st.message);
-      else if (st.state === 'writing') h.status('Pišem stablo…');
-      else if (st.state !== 'done') h.status('Razmišljam…');
+      else if (st.state === 'writing') h.status('Writing a tree…');
+      else if (st.state !== 'done') h.status('Thinking…');
     });
     es.addEventListener('answer', function (ev) { h.answer(JSON.parse(ev.data)); });
     es.addEventListener('done', function () { es.close(); h.done(); });
-    es.onerror = function () { es.close(); h.status('Veza prekinuta.', true); h.done(); };
+    es.onerror = function () { es.close(); h.status('Connection lost.', true); h.done(); };
   }
 
   // status.json may carry show:{focus, trees[]} — the model's choice of what
@@ -2056,12 +2305,12 @@
           // The forest on disk changed under us: the server hands out the
           // rebuilt page, so a reload is how the new tree appears.
           var b = document.createElement('button'); b.className = 'primary';
-          b.textContent = 'Novo stablo: ' + a.trees_added.join(', ') + ' — osvježi';
+          b.textContent = 'New tree: ' + a.trees_added.join(', ') + ' — reload';
           b.onclick = function () { location.reload(); };
           acts.appendChild(b);
         } else if (kind === 'ask' && /\bponud|\boffer|\buzgoj|\bgrow\b/i.test(a.markdown)) {
           var g = document.createElement('button');
-          g.textContent = 'Da, uzgoji to u stablo';
+          g.textContent = 'Yes, grow it into a tree';
           g.onclick = function () { sendAsk('grow', id); };
           acts.appendChild(g);
         }
@@ -2072,7 +2321,7 @@
   // ---- the tutor section: served-mode only, one session per vault ---------
   // The conversation lives on disk under sessions/<slug>/ and the page keeps
   // only the slug, so closing the tab loses nothing and a reload resumes.
-  var TUTOR_WAIT = 'Čekam Claude Code — pokreni /forest:tutor u trezoru.';
+  var TUTOR_WAIT = 'Waiting for Claude Code — run /forest:tutor in the vault.';
   var tutorBox = document.createElement('div');
   tutorBox.id = 'panel-tutor';
   tutorBox.innerHTML =
@@ -2080,14 +2329,14 @@
     '<div id="tutor-live" hidden>' +
     '<div class="tutor-reply" id="tutor-reply"></div>' +
     '<div class="tutor-note" id="tutor-note" hidden></div>' +
-    '<div id="tutor-answer"><textarea id="tutor-a" placeholder="odgovor…"></textarea>' +
-    '<div class="ask-row"><button class="primary" id="tutor-send">Pošalji</button>' +
-    '<button id="tutor-pause">Pauza</button>' +
+    '<div id="tutor-answer"><textarea id="tutor-a" placeholder="answer…"></textarea>' +
+    '<div class="ask-row"><button class="primary" id="tutor-send">Send</button>' +
+    '<button id="tutor-pause">Pause</button>' +
     '<span class="ask-status" id="tutor-status"></span></div></div>' +
-    '<details><summary>Bilješke</summary><div class="tutor-notes" id="tutor-notes"></div></details>' +
+    '<details><summary>Notes</summary><div class="tutor-notes" id="tutor-notes"></div></details>' +
     '</div>' +
-    '<div id="tutor-idle"><button class="primary" id="tutor-start">Pokreni tutora</button>' +
-    '<div class="tutor-hint">Tutor će postavljati pitanja ovdje; odgovaraj u polju ispod.</div></div>';
+    '<div id="tutor-idle"><button class="primary" id="tutor-start">Start the tutor</button>' +
+    '<div class="tutor-hint">The tutor will ask its questions here; answer in the field below.</div></div>';
   var tutor = { slug: null, status: null, lastId: null, notesHtml: '', rev: null, busy: false };
   var tEl = function (id) { return tutorBox.querySelector('#' + id); };
   tEl('tutor-start').onclick = function () { sendTutor('start'); };
@@ -2128,8 +2377,8 @@
     var note = tEl('tutor-note');
     note.hidden = !(st === 'paused' || st === 'done');
     note.textContent = st === 'done'
-      ? 'Sesija je zaključena — bilješke ostaju ispod.'
-      : 'Tutor je zapisao gdje smo stali — nastavi kad želiš.';
+      ? 'The session is closed — the notes stay below.'
+      : 'The tutor noted where we stopped — carry on whenever you like.';
   }
   // Replaced wholesale, as the server renders it; the member's own scroll
   // position in the block survives the swap.
@@ -2185,7 +2434,7 @@
   function sendTutor(action) {
     var ta = tEl('tutor-a');
     var q = action === 'answer' ? ta.value.trim() : '';
-    if (action === 'answer' && !q) { tutorStatus('Napiši odgovor.', true); return; }
+    if (action === 'answer' && !q) { tutorStatus('Write an answer.', true); return; }
     if (action === 'start') {
       tutor.slug = proposeSlug(); rememberSlug(tutor.slug);
       tutor.status = 'active'; tutor.lastId = null; tutor.rev = null;
@@ -2193,14 +2442,14 @@
       renderTutor();
     }
     setTutorBusy(true);
-    tutorStatus('Šaljem…');
+    tutorStatus('Sending…');
     api('/api/ask', { method: 'POST', body: {
       kind: 'tutor', action: action, session: tutor.slug, tree: selected,
       question: q, reply_to: tutor.lastId, progress: Object.keys(done).sort(),
     } }).then(function (r) {
       if (r.error) throw new Error(r.error);
       tutor.lastId = r.id;
-      tutorStatus(r.watcher.alive ? 'Razmišljam…' : TUTOR_WAIT);
+      tutorStatus(r.watcher.alive ? 'Thinking…' : TUTOR_WAIT);
       stream(r.id, {
         wait: TUTOR_WAIT,
         status: tutorStatus,
@@ -2211,7 +2460,7 @@
           tutorStatus('');
         },
       });
-    }).catch(function (e) { tutorStatus('Greška: ' + e.message, true); setTutorBusy(false); });
+    }).catch(function (e) { tutorStatus('Error: ' + e.message, true); setTutorBusy(false); });
   }
 
   if (BRIDGE.on) {
@@ -2220,10 +2469,20 @@
     var poll = function () {
       api('/api/state').then(function (s) {
         pill.classList.toggle('on', !!s.watcher.alive);
-        pill.textContent = s.watcher.alive ? '● Claude Code spojen' : '○ Claude Code nije spojen — /forest:tutor';
-      }).catch(function () { pill.textContent = '○ most nedostupan'; pill.classList.remove('on'); });
+        pill.textContent = s.watcher.alive ? '● Claude Code connected' : '○ Claude Code not connected — /forest:tutor';
+      }).catch(function () { pill.textContent = '○ bridge unreachable'; pill.classList.remove('on'); });
     };
     poll(); setInterval(poll, 5000);
     restoreTutor(); setInterval(pollSession, 2000);
+  }
+
+  // Last of all: the address. A hash may ask for a filter, an arrangement, a
+  // folded pane, an open tree or a focused diagram, so it is read once the
+  // whole page — strip, bridge and all — exists to be put into that state.
+  // Whatever it asks for becomes the first entry in the trail, written with
+  // replaceState, so Back can never walk out of the page.
+  if (FF && fgraph) {
+    readHash();
+    navRecord();
   }
 })();

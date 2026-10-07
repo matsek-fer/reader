@@ -1,8 +1,9 @@
-# Stabla po konceptima
+# Trees by concept
 
-Vault izvrnut kroz registar koncepata (`library/concepts/concepts.yaml`):
-pod svakim konceptom stoje stabla koja ga *uče* (`teaches`). Dokazi ne
-uče nove koncepte pa stoje uz svoje teoreme.
+The vault inverted through the concept registry
+(`library/concepts/concepts.yaml`): under each concept stand the trees
+that *teach* it (`teaches`). Proofs teach no new concepts, so they stand
+beside their theorems.
 
 ## groups
 
@@ -25,7 +26,7 @@ uče nove koncepte pa stoje uz svoje teoreme.
 
 ## lagrange
 
-- [[thm-lagrange]] (theorem) — dokazi: [[prf-lagrange-djelovanje]], [[prf-lagrange-particija]]
+- [[thm-lagrange]] (theorem) — proofs: [[prf-lagrange-djelovanje]], [[prf-lagrange-particija]]
 - [[cor-red-elementa]] (corollary)
 - [[con-slobodna-djelovanja]] (connection)
 
@@ -47,7 +48,7 @@ uče nove koncepte pa stoje uz svoje teoreme.
 ## orbits-stabilizers
 
 - [[exp-orbite-i-stabilizatori]] (exposition)
-- [[thm-burnside]] (theorem) — dokazi: [[prf-burnside]]
+- [[thm-burnside]] (theorem) — proofs: [[prf-burnside]]
 - [[con-slobodna-djelovanja]] (connection)
 - [[mor-fixed-points]] (morphism)
 - [[mor-orbit-count]] (morphism)
@@ -56,7 +57,7 @@ uče nove koncepte pa stoje uz svoje teoreme.
 
 ## orbit-stabilizer-theorem
 
-- [[thm-orbit-stabilizer]] (theorem) — dokazi: [[prf-orbit-stabilizer]]
+- [[thm-orbit-stabilizer]] (theorem) — proofs: [[prf-orbit-stabilizer]]
 
 ## sets
 

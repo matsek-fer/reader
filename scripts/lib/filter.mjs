@@ -1,9 +1,9 @@
 // filter.mjs — the forest view's filter engine: a declarative expression over
 // one vault's trees, objects and arrows, evaluated to a set of ids.
 //
-// WHY a language and not buttons. The two tabs a vault already has are
-// themselves filters over one body of material — Redoslijed keeps the
-// `depends` DAG, Struktura keeps the arrows — and the canvas of a real vault
+// WHY a language and not buttons. The two panes a vault already has are
+// themselves filters over one body of material — Order keeps the `depends`
+// DAG, Structure keeps the arrows — and the canvas of a real vault
 // carries more arrows than anyone can read at once. So the primitive is a
 // filter, the ready-made chips in the page's top bar are nothing but stored
 // expressions, and a natural-language layer later needs no new machinery: it
@@ -39,22 +39,22 @@ const TAXA = [
 ];
 
 // The predicate table is also the documentation a natural-language layer gets
-// from forestFilter.describe(): name, what the argument is, and one line of
-// Croatian saying what it keeps.
+// from forestFilter.describe(): name, what the argument is, and one line saying
+// what it keeps.
 const PREDICATES = [
-  { name: "level", arg: "kind | instance", hr: "jedna razina: kutije i strelice među njima" },
-  { name: "kind-of", arg: "<obj- id>", hr: "primjeri zadane vrste" },
-  { name: "arrow-kind", arg: ARROW_KINDS.join(" | "), hr: "strelice jedne vrste" },
-  { name: "tied-to", arg: "<obj- ili mor- id>", hr: "sve što visi o jednoj strukturi" },
-  { name: "in-data-of", arg: "<obj- id>", hr: "definicijski dijagram jedne vrste" },
-  { name: "region", arg: "<token>", hr: "jedno područje platna" },
-  { name: "about", arg: "<id bilo kojeg stabla>", hr: "most preko `about`, u oba smjera" },
-  { name: "taxon", arg: TAXA.join(" | "), hr: "stabla jednog taksona" },
-  { name: "id", arg: "<id>", hr: "točno jedno stablo" },
-  { name: "text", arg: "<podniz>", hr: "id ili naslov sadrži tekst" },
-  { name: "and", arg: "[izraz, …]", hr: "sve mora vrijediti" },
-  { name: "or", arg: "[izraz, …]", hr: "barem jedno mora vrijediti" },
-  { name: "not", arg: "izraz", hr: "obrat" },
+  { name: "level", arg: "kind | instance", desc: "one level: the boxes and the arrows between them" },
+  { name: "kind-of", arg: "<obj- id>", desc: "the instances of one kind" },
+  { name: "arrow-kind", arg: ARROW_KINDS.join(" | "), desc: "arrows of one kind" },
+  { name: "tied-to", arg: "<obj- or mor- id>", desc: "everything hanging off one structure" },
+  { name: "in-data-of", arg: "<obj- id>", desc: "one kind's defining diagram" },
+  { name: "region", arg: "<token>", desc: "one region of the canvas" },
+  { name: "about", arg: "<id of any tree>", desc: "the `about` bridge, both ways" },
+  { name: "taxon", arg: TAXA.join(" | "), desc: "trees of one taxon" },
+  { name: "id", arg: "<id>", desc: "exactly one tree" },
+  { name: "text", arg: "<substring>", desc: "id or title contains the text" },
+  { name: "and", arg: "[expr, …]", desc: "all must hold" },
+  { name: "or", arg: "[expr, …]", desc: "at least one must hold" },
+  { name: "not", arg: "expr", desc: "the opposite" },
 ];
 
 const COMBINATORS = ["and", "or", "not"];
@@ -215,8 +215,8 @@ function tiedTo(graph, id) {
 }
 
 // in-data-of: one kind's defining diagram — the kind, the ids it lists, and the
-// ends of the arrows it lists. The same set the panel's "Prikaži definiciju na
-// platnu" button already focuses, so the two agree.
+// ends of the arrows it lists. The same set the panel's "Show the definition on
+// the canvas" button already focuses, so the two agree.
 function inDataOf(graph, id) {
   const set = {};
   const n = graph.node[id];
@@ -265,19 +265,19 @@ function problem(code, detail, fatal) {
   return { code: code, detail: detail == null ? "" : String(detail), fatal: !!fatal };
 }
 
-// Croatian, because it is shown in the filter bar. Code is English.
+// Read in the filter bar, so these are sentences, not codes.
 function problemText(p) {
   const d = p.detail;
   switch (p.code) {
-    case "not-an-object": return 'filtar mora biti JSON objekt, npr. {"level": "instance"}';
-    case "empty": return "prazan filtar";
-    case "unknown-predicate": return "nepoznat predikat: " + d;
-    case "bad-argument": return "predikat " + d + " je dobio pogrešnu vrstu vrijednosti";
-    case "bad-value": return "nedopuštena vrijednost: " + d;
-    case "too-deep": return "filtar je ugniježđen predubokо";
-    case "unknown-id": return "nijedno stablo nema id " + d;
-    case "no-data": return d + " nije vrsta s definicijskim dijagramom";
-    case "bad-json": return "neispravan JSON: " + d;
+    case "not-an-object": return 'a filter must be a JSON object, e.g. {"level": "instance"}';
+    case "empty": return "empty filter";
+    case "unknown-predicate": return "unknown predicate: " + d;
+    case "bad-argument": return "predicate " + d + " was given the wrong kind of value";
+    case "bad-value": return "value not allowed: " + d;
+    case "too-deep": return "the filter is nested too deeply";
+    case "unknown-id": return "no tree has the id " + d;
+    case "no-data": return d + " is not a kind with a defining diagram";
+    case "bad-json": return "invalid JSON: " + d;
     default: return p.code + (d ? ": " + d : "");
   }
 }
@@ -419,6 +419,33 @@ function compile(expr, graph, problems, depth) {
   }
 }
 
+// An arrow in the match set drags both of its ends in with it. A lit arrow
+// hanging off a dim box is read as a mistake whatever the predicate meant by
+// it — an arrow IS a statement about two objects, so a result that shows one of
+// them and not the other is showing half a sentence. The closure runs once over
+// the finished set rather than inside any predicate, so it holds for every
+// expression there is and for every one added later.
+//
+// It is deliberately one-way: lighting a box does NOT drag in its arrows.
+// Everything in a real vault touches an arrow, so the reverse would turn any
+// filter into the whole canvas, and `tied-to` already exists for the reader who
+// wants a box's neighbourhood.
+function closeEndpoints(ids, graph) {
+  const added = [];
+  Object.keys(ids).forEach(function (id) {
+    const n = graph.node[id];
+    if (!n || n.taxon !== "morphism") return;
+    [n.from, n.to].forEach(function (end) {
+      // `pt` in a 0.2 instance arrow is no tree; an end that is not a node of
+      // this graph is nothing to light.
+      if (!end || ids[end] || !graph.node[end]) return;
+      ids[end] = true;
+      added.push(end);
+    });
+  });
+  return added;
+}
+
 // The one entry point: a set of matched ids, the problems met on the way, and
 // the split the page's counter reads. `fatal` means the expression could not be
 // understood — the caller leaves the view alone and shows the message.
@@ -427,17 +454,21 @@ function evaluate(expr, graph) {
   const test = compile(expr, graph, problems, 0);
   const fatal = problems.some(function (p) { return p.fatal; });
   const ids = {};
-  let objects = 0, arrows = 0, trees = 0;
   if (!fatal) {
     graph.ids.forEach(function (id) {
-      const n = graph.node[id];
-      if (!test(n)) return;
-      ids[id] = true;
-      if (n.taxon === "object") objects++;
-      else if (n.taxon === "morphism") arrows++;
-      else trees++;
+      if (test(graph.node[id])) ids[id] = true;
     });
+    closeEndpoints(ids, graph);
   }
+  // Counted after the closure, because the bar's numbers are a promise about
+  // what is lit on the screen and not about what the predicate said.
+  let objects = 0, arrows = 0, trees = 0;
+  Object.keys(ids).forEach(function (id) {
+    const taxon = graph.node[id].taxon;
+    if (taxon === "object") objects++;
+    else if (taxon === "morphism") arrows++;
+    else trees++;
+  });
   return {
     ids: ids,
     problems: problems,
@@ -460,7 +491,7 @@ function parseExpr(text) {
 
 // -------------------------------------------------------------- saying it back
 
-// A Croatian one-liner for the bar and for an NL layer reading describe().
+// A one-liner for the bar and for an NL layer reading describe().
 // Titles beat ids where a title exists, because this line is read, not parsed.
 function describeExpr(expr, graph) {
   const name = function (id) {
@@ -475,7 +506,7 @@ function describeExpr(expr, graph) {
     return keys.map(function (k) {
       const one = {}; one[k] = expr[k];
       return describeExpr(one, graph);
-    }).join(" i ");
+    }).join(" and ");
   }
   const key = keys[0], val = expr[key];
   if (key === "and" || key === "or") {
@@ -483,24 +514,24 @@ function describeExpr(expr, graph) {
       const s = describeExpr(e, graph);
       return Object.keys(e || {}).length > 1 ? "(" + s + ")" : s;
     });
-    if (!parts.length) return key === "and" ? "sve" : "ništa";
-    return parts.join(key === "and" ? " i " : " ili ");
+    if (!parts.length) return key === "and" ? "everything" : "nothing";
+    return parts.join(key === "and" ? " and " : " or ");
   }
-  if (key === "not") return "ne " + describeExpr(val, graph);
+  if (key === "not") return "not " + describeExpr(val, graph);
   switch (key) {
-    case "level": return val === "kind" ? "vrste struktura i odnosi među njima" : "primjeri i preslikavanja među njima";
-    case "kind-of": return "primjeri vrste " + name(val);
-    case "arrow-kind": return "strelice vrste " + val;
-    case "tied-to": return "sve oko " + name(val);
-    case "in-data-of": return "definicija vrste " + name(val);
+    case "level": return val === "kind" ? "kinds of structure and the relations between them" : "instances and the maps between them";
+    case "kind-of": return "instances of the kind " + name(val);
+    case "arrow-kind": return "arrows of kind " + val;
+    case "tied-to": return "everything around " + name(val);
+    case "in-data-of": return "the definition of the kind " + name(val);
     case "region": {
       const r = graph && graph.regions.filter(function (x) { return x.id === val; })[0];
-      return "područje " + (r ? r.title : val);
+      return "region " + (r ? r.title : val);
     }
-    case "about": return "oko " + name(val) + " (preko about)";
-    case "taxon": return "takson " + val;
+    case "about": return "around " + name(val) + " (via about)";
+    case "taxon": return "taxon " + val;
     case "id": return name(val);
-    case "text": return "tekst „" + val + "”";
+    case "text": return 'text "' + val + '"';
     default: return key + "=" + String(val);
   }
 }
@@ -508,44 +539,44 @@ function describeExpr(expr, graph) {
 // The ready-made chips, built from the vault's own data: one per region it
 // declares, one per arrow kind it actually uses, the two levels, and one per
 // taxon present — so a 0.1 vault with no structure layer still has a useful
-// tray. Labels come from the page (it owns the Croatian words for kinds and
-// taxa); ids stand in when a label is missing.
+// tray. Labels come from the page (it owns the words for kinds and taxa); ids
+// stand in when a label is missing.
 function chipsFor(graph, labels) {
   const L = labels || {};
-  const kindHr = L.kinds || {};
-  const taxonHr = L.taxa || {};
+  const kindLabel = L.kinds || {};
+  const taxonLabel = L.taxa || {};
   const out = [];
   // The kind chip is the one the owner asked for by the wrong name: not "all
   // categories" but the structure layer and the relationships inside it, with
   // the named examples dimmed away.
   if (graph.levels.indexOf("kind") >= 0) {
     out.push({
-      id: "level-kind", group: "razine",
-      label: "strukture i odnosi među njima", expr: { level: "kind" },
+      id: "level-kind", group: "levels",
+      label: "structures and the relations between them", expr: { level: "kind" },
     });
   }
   if (graph.levels.indexOf("instance") >= 0) {
     out.push({
-      id: "level-instance", group: "razine",
-      label: "primjeri i preslikavanja među njima", expr: { level: "instance" },
+      id: "level-instance", group: "levels",
+      label: "instances and the maps between them", expr: { level: "instance" },
     });
   }
   if (graph.arrowKinds.indexOf("hom") >= 0) {
-    out.push({ id: "only-hom", group: "razine", label: "samo morfizmi", expr: { "arrow-kind": "hom" } });
+    out.push({ id: "only-hom", group: "levels", label: "morphisms only", expr: { "arrow-kind": "hom" } });
   }
   graph.regions.forEach(function (r) {
-    out.push({ id: "region-" + r.id, group: "područja", label: r.title, expr: { region: r.id } });
+    out.push({ id: "region-" + r.id, group: "regions", label: r.title, expr: { region: r.id } });
   });
   graph.arrowKinds.forEach(function (k) {
     out.push({
-      id: "kind-" + k, group: "vrste strelica",
-      label: kindHr[k] || k, expr: { "arrow-kind": k },
+      id: "kind-" + k, group: "arrow kinds",
+      label: kindLabel[k] || k, expr: { "arrow-kind": k },
     });
   });
   graph.taxa.forEach(function (t) {
     out.push({
-      id: "taxon-" + t, group: "taksoni",
-      label: taxonHr[t] || t, expr: { taxon: t },
+      id: "taxon-" + t, group: "taxa",
+      label: taxonLabel[t] || t, expr: { taxon: t },
     });
   });
   return out;
@@ -557,7 +588,7 @@ function chipsFor(graph, labels) {
 function vocabulary(graph) {
   return {
     predicates: PREDICATES.map(function (p) {
-      return { name: p.name, arg: p.arg, hr: p.hr };
+      return { name: p.name, arg: p.arg, desc: p.desc };
     }),
     levels: graph.levels.slice(),
     arrowKinds: graph.arrowKinds.slice(),
@@ -584,8 +615,9 @@ const FOREST_FILTER = {
   buildGraph: buildGraph, evaluate: evaluate, parseExpr: parseExpr,
   describeExpr: describeExpr, problemText: problemText, chipsFor: chipsFor,
   vocabulary: vocabulary, tiedTo: tiedTo, inDataOf: inDataOf, aboutSet: aboutSet,
+  closeEndpoints: closeEndpoints,
   PREDICATES: PREDICATES, ARROW_KINDS: ARROW_KINDS, LEVELS: LEVELS, TAXA: TAXA,
   HASH_KEY: HASH_KEY,
 };
 
-export { FOREST_FILTER as default, buildGraph, evaluate, parseExpr, describeExpr, problemText, chipsFor, vocabulary, tiedTo, inDataOf, aboutSet, PREDICATES, ARROW_KINDS, LEVELS, TAXA, HASH_KEY };
+export { FOREST_FILTER as default, buildGraph, evaluate, parseExpr, describeExpr, problemText, chipsFor, vocabulary, tiedTo, inDataOf, aboutSet, closeEndpoints, PREDICATES, ARROW_KINDS, LEVELS, TAXA, HASH_KEY };

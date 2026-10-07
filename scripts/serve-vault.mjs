@@ -294,7 +294,8 @@ async function handle(req, res) {
         // The timer runs outside the handler's try, so a throw here would be
         // an uncaught exception — the same process exit, by another road.
         console.error(`answer stream ${m[1]} failed: ${e.message}`);
-        emit("status", { state: "error", message: "most nije uspio pročitati odgovor" });
+        // Shown in the page's own status line, so it is in the page's language.
+        emit("status", { state: "error", message: "the bridge could not read the answer" });
         emit("done", {});
         finish();
       }

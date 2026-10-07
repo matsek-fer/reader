@@ -10,7 +10,7 @@
 //                       statements, exercises toggle globally, clicking a
 //                       node opens the tree's full content with math
 //                       pre-rendered, and every node wears one of three
-//                       reading states (savladano / spremno / nije spremno)
+//                       reading states (mastered / ready to read / not ready)
 //                       computed at runtime from the full depends lists and
 //                       the reader's own marks (localStorage).
 //   views/dag.md        mermaid fallback for Obsidian — one group overview
@@ -26,7 +26,7 @@
 // JavaScript only applies precomputed coordinates and stacks the group
 // bands; it never lays anything out.
 //
-// A forest-0.2 vault with objects gets a second tab, Struktura: object boxes
+// A forest-0.2 vault with objects gets a second pane, Structure: object boxes
 // placed by lib/layout.mjs (cycles broken, then layered like a group), with
 // arrows drawn and labelled by the page from build-time positions, and a
 // bottom strip collecting the picked tree's commutative diagrams. An arrow
@@ -55,23 +55,27 @@ const require = createRequire(import.meta.url);
 
 const WIKILINK = /\[\[([^\[\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g;
 
-const TAXON_HR = {
-  theorem: "teorem",
-  lemma: "lema",
-  proposition: "propozicija",
-  corollary: "korolar",
-  definition: "definicija",
-  axiom: "aksiom",
-  proof: "dokaz",
-  example: "primjer",
-  exercise: "zadatak",
-  exposition: "izlaganje",
-  motivation: "motivacija",
-  intuition: "intuicija",
-  remark: "napomena",
-  connection: "poveznica",
-  object: "objekt",
-  morphism: "strelica",
+// The page's own word for every taxon. `morphism` reads "arrow" because the
+// canvas calls these things arrows throughout, and because "morphism" is spoken
+// for: it is the label of the `hom` arrow KIND below. One word in both legends
+// would collapse two different distinctions into one.
+const TAXON_LABEL = {
+  theorem: "theorem",
+  lemma: "lemma",
+  proposition: "proposition",
+  corollary: "corollary",
+  definition: "definition",
+  axiom: "axiom",
+  proof: "proof",
+  example: "example",
+  exercise: "exercise",
+  exposition: "exposition",
+  motivation: "motivation",
+  intuition: "intuition",
+  remark: "remark",
+  connection: "connection",
+  object: "object",
+  morphism: "arrow",
 };
 
 // One accent per taxon family, muted enough to sit on a dark card.
@@ -97,15 +101,15 @@ const TAXON_COLOR = {
 // Arrow kinds of the structure graph, in the order panels list them. The
 // colours reuse the taxon palette: they are edge colours, never node colours,
 // so the two never sit side by side.
-const KIND_HR = {
-  data: "podaci",
-  transform: "pretvorba",
-  extract: "izvlači",
-  property: "svojstvo",
-  instance: "primjer",
-  generalizes: "poopćenje",
-  construction: "konstrukcija",
-  hom: "morfizam",
+const KIND_LABEL = {
+  data: "data",
+  transform: "transform",
+  extract: "extract",
+  property: "property",
+  instance: "instance",
+  generalizes: "generalizes",
+  construction: "construction",
+  hom: "morphism",
 };
 const KIND_COLOR = {
   data: "#5b9dd9",
@@ -118,15 +122,17 @@ const KIND_COLOR = {
   hom: "#c3d65c",
 };
 
-// The two levels of a forest-0.3 vault, in the words the page shows.
-const LEVEL_HR = { kind: "struktura", instance: "primjer" };
+// The two levels of a forest-0.3 vault, in the words the page shows — which are
+// the format's own two words, so the canvas, the panel and a filter expression
+// all say the same thing.
+const LEVEL_LABEL = { kind: "kind", instance: "instance" };
 
 // Principles of the formal system a tree may assume; any other token is
 // shown as written.
-const ASSUMES_HR = {
-  "axiom-of-choice": "aksiom izbora",
-  "excluded-middle": "zakon isključenja trećeg",
-  "continuum-hypothesis": "hipoteza kontinuuma",
+const ASSUMES_LABEL = {
+  "axiom-of-choice": "axiom of choice",
+  "excluded-middle": "excluded middle",
+  "continuum-hypothesis": "continuum hypothesis",
 };
 
 function main() {
@@ -341,7 +347,7 @@ function katexCss() {
 
 // ------------------------------------------------------------------ structure
 
-// Everything the Struktura tab needs beyond the trees themselves, computed
+// Everything the Structure pane needs beyond the trees themselves, computed
 // once: objects with their symbols, arrows with their labels and statements,
 // instances under their object, theorems indexed by what they are about, and
 // the boxes' positions. Null for a vault without objects, so a 0.1 page has
@@ -426,7 +432,7 @@ function buildStructure(vault, groups) {
     }
   }
 
-  // index.md order breaks ties inside a column, as in the Redoslijed tab.
+  // index.md order breaks ties inside a column, as in the Order pane.
   const rank = new Map();
   let i = 0;
   for (const g of groups) for (const m of g.members) rank.set(m, i++);
@@ -510,15 +516,15 @@ function treeLink(id, trees) {
 }
 
 function kindChip(kind) {
-  return `<span class="kind-chip" style="--c:${KIND_COLOR[kind] ?? "#888"}">${escapeHtml(KIND_HR[kind] ?? kind)}</span>`;
+  return `<span class="kind-chip" style="--c:${KIND_COLOR[kind] ?? "#888"}">${escapeHtml(KIND_LABEL[kind] ?? kind)}</span>`;
 }
 
 const headRow = (k, v) => `<div class="sh-row"><span class="sh-k">${k}</span><span class="sh-v">${v}</span></div>`;
 
 function assumesRow(fm) {
   if (!Array.isArray(fm.assumes) || !fm.assumes.length) return [];
-  const names = fm.assumes.map((a) => (ASSUMES_HR[a] ? escapeHtml(ASSUMES_HR[a]) : `<code>${escapeHtml(a)}</code>`));
-  return [headRow("Pretpostavlja", names.join(", "))];
+  const names = fm.assumes.map((a) => (ASSUMES_LABEL[a] ? escapeHtml(ASSUMES_LABEL[a]) : `<code>${escapeHtml(a)}</code>`));
+  return [headRow("Assumes", names.join(", "))];
 }
 
 // What a tree that is neither object nor arrow says in its head: what it is
@@ -527,10 +533,10 @@ function assumesRow(fm) {
 function aboutHead(fm, trees) {
   const rows = [];
   if (Array.isArray(fm.about) && fm.about.length) {
-    rows.push(headRow("Govori o", fm.about.map((target) => treeLink(target, trees)).join(", ")));
+    rows.push(headRow("About", fm.about.map((target) => treeLink(target, trees)).join(", ")));
   }
   if (Array.isArray(fm.fields) && fm.fields.length) {
-    rows.push(headRow("Područja", fm.fields.map((x) => `<span class="field-chip">${escapeHtml(x)}</span>`).join(" ")));
+    rows.push(headRow("Fields", fm.fields.map((x) => `<span class="field-chip">${escapeHtml(x)}</span>`).join(" ")));
   }
   rows.push(...assumesRow(fm));
   return rows.length ? `<div class="struct-head struct-about">${rows.join("")}</div>` : "";
@@ -552,58 +558,58 @@ function structHead(id, fm, trees, structure, lang) {
   if (fm.taxon === "object") {
     // A typed object is another box of its type's kind and inherits its maps.
     const type = typeOf(fm, trees);
-    if (type) rows.push(row("Isti tip kao", link(fm.type)));
+    if (type) rows.push(row("Same type as", link(fm.type)));
     const hom = fm.hom ?? type?.hom;
-    if (hom) rows.push(row("Preslikavanja", inline(hom)));
+    if (hom) rows.push(row("Maps", inline(hom)));
     if (fm.nlab && fm.nlab.title) {
       const rev = fm.nlab.revision != null ? `, rev. ${escapeHtml(fm.nlab.revision)}` : "";
-      rows.push(row("Prema nLab", `${escapeHtml(fm.nlab.title)}${rev}`));
+      rows.push(row("After nLab", `${escapeHtml(fm.nlab.title)}${rev}`));
     }
-    if (fm.same_as) rows.push(row("U knjižnici", `<code>${escapeHtml(fm.same_as)}</code>`));
+    if (fm.same_as) rows.push(row("In the library", `<code>${escapeHtml(fm.same_as)}</code>`));
     rows.push(...assumesRow(fm));
     const math = fm.symbol ? `<div class="sh-math">${renderMath(String(fm.symbol), true)}</div>` : "";
     return `<div class="struct-head">${math}${rows.join("")}</div>`;
   }
   if (fm.taxon === "morphism") {
     const kind = fm.kind;
-    rows.push(row("Vrsta", kindChip(kind)));
-    if (kind === "instance") rows.push(row("Primjer za", link(fm.to)));
-    else rows.push(row("Iz → u", `${link(fm.from)} <span class="sh-arrow">→</span> ${link(fm.to)}`));
+    rows.push(row("Kind", kindChip(kind)));
+    if (kind === "instance") rows.push(row("Instance of", link(fm.to)));
+    else rows.push(row("From → to", `${link(fm.from)} <span class="sh-arrow">→</span> ${link(fm.to)}`));
     if (kind !== "instance") {
-      if (fm.acts_on === "all") rows.push(row("Čita", "sve podatke izvora"));
+      if (fm.acts_on === "all") rows.push(row("Reads", "all of the source's data"));
       else if (Array.isArray(fm.acts_on)) {
-        rows.push(row("Čita", fm.acts_on.length ? fm.acts_on.map(link).join(", ") : "ništa od izvora"));
+        rows.push(row("Reads", fm.acts_on.length ? fm.acts_on.map(link).join(", ") : "nothing of the source"));
       }
       if (Array.isArray(fm.needs)) {
-        rows.push(row("Treba još", fm.needs.length
+        rows.push(row("Also needs", fm.needs.length
           ? `<ul class="sh-list">${fm.needs.map((n) => `<li>${inline(n)}</li>`).join("")}</ul>`
-          : kind === "hom" ? "ništa osim dvaju krajeva" : "ništa izvan izvora"));
+          : kind === "hom" ? "nothing but its two ends" : "nothing beyond the source"));
       }
-      if (fm.on_homomorphisms) rows.push(row("Na preslikavanjima", inline(fm.on_homomorphisms)));
-      if (typeof fm.functorial === "boolean") rows.push(row("Funktorijalno", fm.functorial ? "da" : "ne"));
-      if (kind === "hom" && typeof fm.invertible === "boolean") rows.push(row("Izomorfizam", fm.invertible ? "da" : "ne"));
+      if (fm.on_homomorphisms) rows.push(row("On homomorphisms", inline(fm.on_homomorphisms)));
+      if (typeof fm.functorial === "boolean") rows.push(row("Functorial", fm.functorial ? "yes" : "no"));
+      if (kind === "hom" && typeof fm.invertible === "boolean") rows.push(row("Isomorphism", fm.invertible ? "yes" : "no"));
     }
     if (fm.inverse) {
       // Either side of the pair may name the tree stating the isomorphism.
       const upTo = [fm.up_to, trees.get(fm.inverse)?.fm.up_to].find((t) => t && trees.has(t));
       rows.push(upTo
-        ? row("Inverz (do na kanonski izomorfizam)", `${link(fm.inverse)} — vidi ${link(upTo)}`)
-        : row("Inverz", link(fm.inverse)));
+        ? row("Inverse (up to canonical isomorphism)", `${link(fm.inverse)} — see ${link(upTo)}`)
+        : row("Inverse", link(fm.inverse)));
     }
     if (Array.isArray(fm.generalized_by) && fm.generalized_by.length) {
-      rows.push(row("Poopćenje", fm.generalized_by.map(link).join(", ")));
+      rows.push(row("Generalized by", fm.generalized_by.map(link).join(", ")));
     }
     const special = structure.arrows
       .filter((a) => (trees.get(a.id).fm.generalized_by ?? []).includes(id))
       .map((a) => a.id);
-    if (special.length) rows.push(row("Poseban slučaj", special.map(link).join(", ")));
+    if (special.length) rows.push(row("Special case", special.map(link).join(", ")));
     if (kind === "instance" && fm.values && typeof fm.values === "object") {
       const labelOf = (k) => structure.arrows.find((a) => a.id === k)?.label_html ?? "";
       const dl = Object.entries(fm.values)
         .filter(([k]) => trees.has(k))
         .map(([k, v]) => `<dt><span class="sh-lbl">${labelOf(k)}</span> ${link(k)}</dt><dd>${inline(v)}</dd>`)
         .join("");
-      if (dl) rows.push(`<div class="sh-row"><span class="sh-k">Vrijednosti</span><dl class="sh-dl">${dl}</dl></div>`);
+      if (dl) rows.push(`<div class="sh-row"><span class="sh-k">Values</span><dl class="sh-dl">${dl}</dl></div>`);
     }
     rows.push(...assumesRow(fm));
     const math = fm.statement ? `<div class="sh-math">${renderMath(String(fm.statement), true)}</div>` : "";
@@ -613,7 +619,7 @@ function structHead(id, fm, trees, structure, lang) {
 }
 
 const levelChip = (level) =>
-  `<span class="level-chip lvl-${level}">${LEVEL_HR[level]}</span>`;
+  `<span class="level-chip lvl-${level}">${LEVEL_LABEL[level]}</span>`;
 
 // An object's head in a 0.3 vault. The level comes first, because every row
 // under it reads differently on the two: a kind states what a map between two
@@ -624,25 +630,25 @@ function objectHead03(id, fm, trees, structure, lang) {
   const link = (target) => treeLink(target, trees);
   const o = structure.objects.find((x) => x.id === id) ?? { level: "kind" };
   const kind = kindOf(fm, trees);
-  const rows = [headRow("Razina", levelChip(o.level))];
-  if (kind) rows.push(headRow("Primjer vrste", link(fm.instance_of)));
+  const rows = [headRow("Level", levelChip(o.level))];
+  if (kind) rows.push(headRow("Instance of", link(fm.instance_of)));
   const hom = fm.hom ?? kind?.hom;
-  if (hom) rows.push(headRow(kind ? "Preslikavanja (iz vrste)" : "Preslikavanja", inline(hom)));
+  if (hom) rows.push(headRow(kind ? "Maps (from the kind)" : "Maps", inline(hom)));
   if (o.data?.length) {
-    rows.push(headRow("Definiran dijagramom", o.data.map(link).join(", ")));
+    rows.push(headRow("Defined by diagram", o.data.map(link).join(", ")));
   }
   if (fm.nlab && fm.nlab.title) {
     const rev = fm.nlab.revision != null ? `, rev. ${escapeHtml(fm.nlab.revision)}` : "";
-    rows.push(headRow("Prema nLab", `${escapeHtml(fm.nlab.title)}${rev}`));
+    rows.push(headRow("After nLab", `${escapeHtml(fm.nlab.title)}${rev}`));
   }
-  if (fm.same_as) rows.push(headRow("U knjižnici", `<code>${escapeHtml(fm.same_as)}</code>`));
+  if (fm.same_as) rows.push(headRow("In the library", `<code>${escapeHtml(fm.same_as)}</code>`));
   if (o.level === "instance" && fm.values && typeof fm.values === "object") {
     const labelOf = (k) => structure.arrows.find((a) => a.id === k)?.label_html ?? "";
     const dl = Object.entries(fm.values)
       .filter(([k]) => trees.has(k))
       .map(([k, v]) => `<dt><span class="sh-lbl">${labelOf(k)}</span> ${link(k)}</dt><dd>${inline(v)}</dd>`)
       .join("");
-    if (dl) rows.push(`<div class="sh-row"><span class="sh-k">Vrijednosti</span><dl class="sh-dl">${dl}</dl></div>`);
+    if (dl) rows.push(`<div class="sh-row"><span class="sh-k">Values</span><dl class="sh-dl">${dl}</dl></div>`);
   }
   rows.push(...assumesRow(fm));
   const math = fm.symbol ? `<div class="sh-math">${renderMath(String(fm.symbol), true)}</div>` : "";
@@ -652,7 +658,7 @@ function objectHead03(id, fm, trees, structure, lang) {
 
 // A kind's defining diagram — the instances it is drawn over and the arrows
 // between them — through the cd renderer, so going one level lower reads like
-// a figure from a body and the Dijagrami strip picks it up like one. The
+// a figure from a body and the Diagrams strip picks it up like one. The
 // button beside it asks the canvas for the same diagram in place.
 function defFigure(id, data, trees, lang) {
   const oneLine = (v) => String(v).replace(/\s+/g, " ").trim();
@@ -660,7 +666,7 @@ function defFigure(id, data, trees, lang) {
   const mors = data.filter((x) => trees.get(x).fm.taxon === "morphism");
   const at = new Map(objs.map((x, i) => [x, [i % 3, Math.floor(i / 3)]]));
   const name = (x) => `C${objs.indexOf(x)}`;
-  const lines = [`% title: ${lang === "en" ? "Defining diagram" : "Definicijski dijagram"}`];
+  const lines = ["% title: Defining diagram"];
   for (const x of objs) {
     lines.push(`${name(x)} @ ${at.get(x)[0]},${at.get(x)[1]} : ${oneLine(trees.get(x).fm.symbol ?? x)}`);
   }
@@ -670,24 +676,24 @@ function defFigure(id, data, trees, lang) {
     const lbl = oneLine(f.label ?? f.statement ?? "");
     lines.push(`${name(f.from)} -> ${name(f.to)}${lbl ? ` : ${lbl} [above]` : ""}`);
   }
-  const btn = `<button class="def-focus" data-focus="${escapeHtml(id)}">Prikaži definiciju na platnu</button>`;
+  const btn = `<button class="def-focus" data-focus="${escapeHtml(id)}">Show the definition on the canvas</button>`;
   return `<div class="struct-def">${renderCd(lines.join("\n"), { has: (x) => trees.has(x), lang })}${btn}</div>`;
 }
 
 // An arrow from an object to itself, unrolled: three copies of the object and
 // an ellipsis in a row, joined by the arrow. It goes through the cd renderer,
-// so the panel and the Dijagrami strip treat it like a figure from a body.
+// so the panel and the Diagrams strip treat it like a figure from a body.
 function chainFigure(fm, trees, lang) {
   const oneLine = (v) => String(v).replace(/\s+/g, " ").trim();
   const symbol = oneLine(trees.get(fm.from)?.fm.symbol ?? "X");
   const label = oneLine(fm.label ?? "f");
   const source = [
-    `% title: ${lang === "en" ? "As a chain" : "Kao lanac"}`,
+    "% title: As a chain",
     ...["A", "B", "C"].map((name, col) => `${name} @ ${col},0 : ${symbol}`),
     "D @ 3,0 : \\cdots",
     ...["A -> B", "B -> C", "C -> D"].map((ends) => `${ends} : ${label} [above]`),
   ].join("\n");
-  return `<div class="struct-chain"><h3 class="ssec">Odmotana petlja</h3>${renderCd(source, { has: (id) => trees.has(id), lang })}</div>`;
+  return `<div class="struct-chain"><h3 class="ssec">Unrolled loop</h3>${renderCd(source, { has: (id) => trees.has(id), lang })}</div>`;
 }
 
 // The 0.3 canvas: a region frame per labelled area, then one box per object in
@@ -710,9 +716,13 @@ function structureSvg03(structure, trees) {
       const w = o.w, h = o.h;
       // The tag shares the instance box's only text line, so the title stops short of it.
       const title = wrapLabel(o.title, inst ? 14 : 24, 1)[0] ?? "";
-      const level = `<text class="nlevel" x="${w - 6}" y="${inst ? 13 : h - 8}" text-anchor="end">${LEVEL_HR[o.level]}</text>`;
-      // The id and the level tag share the bottom line of a kind box, so the
-      // id gets only the room the longer of the two tag words leaves it.
+      const level = `<text class="nlevel" x="${w - 6}" y="${inst ? 13 : h - 8}" text-anchor="end">${LEVEL_LABEL[o.level]}</text>`;
+      // The id and the level tag share the bottom line of a kind box, so the id
+      // gets only the room the tag leaves it. Both limits were set against the
+      // longer Croatian words; "kind" is short enough that a kind box now has
+      // about 50px of slack on that line, and "instance" leaves an instance's
+      // 14-character title some 5px — measured clear at every box in Monsky and
+      // mini, and the number to lower first if a tighter title ever touches it.
       const idMax = inst ? 18 : 14;
       const shortId = o.id.length > idMax ? o.id.slice(0, idMax - 1) + "…" : o.id;
       return (
@@ -730,7 +740,7 @@ function structureSvg03(structure, trees) {
   return `<g id="sregions">${regions}</g><g id="sties"></g><g id="sedges"></g>\n${boxes}`;
 }
 
-// Object boxes for the Struktura layer, positioned at build time; instance
+// Object boxes for the Structure layer, positioned at build time; instance
 // chips hang under their object. Arrows and labels are drawn by the page.
 function structureSvg(structure, trees) {
   if (structure.twoLevel) return structureSvg03(structure, trees);
@@ -800,7 +810,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
   const nodeInfo = {};
   const contentHtml = {};
   // Full per-tree depends (NOT the transitively-reduced set). Readiness
-  // means "every real prerequisite is savladano", and the reader may mark
+  // means "every real prerequisite is mastered", and the reader may mark
   // out of order — so an edge implied by a longer path still gates.
   const depsOf = {};
   for (const id of ids) {
@@ -821,13 +831,13 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
     const isStruct = t.fm.taxon === "object" || t.fm.taxon === "morphism";
     const isLoop = t.fm.taxon === "morphism" && t.fm.from === t.fm.to && trees.get(t.fm.from)?.fm.taxon === "object";
     const src = t.fm.source
-      ? [t.fm.source.ref, t.fm.source.pages && `str. ${t.fm.source.pages}`]
+      ? [t.fm.source.ref, t.fm.source.pages && `pp. ${t.fm.source.pages}`]
           .filter(Boolean)
           .join(" · ")
       : "";
     contentHtml[id] =
       `<div class="panel-head"><span class="chip" style="--c:${TAXON_COLOR[t.fm.taxon]}">` +
-      `${TAXON_HR[t.fm.taxon]}</span><h2>${renderTitle(t.fm.title)}</h2>` +
+      `${TAXON_LABEL[t.fm.taxon]}</span><h2>${renderTitle(t.fm.title)}</h2>` +
       `<div class="panel-id">${escapeHtml(id)}${src ? " · " + escapeHtml(src) : ""}</div></div>` +
       (structure ? structHead(id, t.fm, trees, structure, lang) : structured ? aboutHead(t.fm, trees) : "") +
       renderBody(t.body, trees, lang) +
@@ -835,7 +845,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
       (isStruct ? `<div class="struct-sections" data-id="${escapeHtml(id)}"></div>` : "") +
       `<p class="obsidian"><a href="obsidian://open?path=${encodeURIComponent(
         path.join(absVault, t.file)
-      )}">Otvori u Obsidianu</a> <span class="obs-hint">· radi tek kad mapu trezora jednom otvoriš kao vault (<em>Open folder as vault</em>)</span></p>`;
+      )}">Open in Obsidian</a> <span class="obs-hint">· works only once you have opened the vault folder in Obsidian as a vault (<em>Open folder as vault</em>)</span></p>`;
   }
 
   // SVG bodies for every node card, emitted once; JS positions them.
@@ -865,7 +875,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
               `<text class="nid" x="10" y="${h - 8}">${escapeHtml(shortId)}</text>`;
           const badge =
             !isPrf && proofsOf.has(id)
-              ? `<text class="prfbadge" data-prf="${escapeHtml(proofsOf.get(id)[0])}" x="${w - 8}" y="${h - 8}" text-anchor="end">▸ dokaz</text>`
+              ? `<text class="prfbadge" data-prf="${escapeHtml(proofsOf.get(id)[0])}" x="${w - 8}" y="${h - 8}" text-anchor="end">▸ proof</text>`
               : "";
           return (
             `<g class="node${isPrf ? " prfnode" : ""}" data-id="${escapeHtml(id)}">` +
@@ -884,41 +894,41 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
         `<text class="grp-arrow" x="12" y="${HEADER_H / 2 + 5}">▸</text>` +
         `<text class="grp-title" x="30" y="${HEADER_H / 2 + 5}" data-full="${escapeHtml(g.title)}">${escapeHtml(g.title)}</text>` +
         `<title>${escapeHtml(g.title)}</title>` +
-        `<text class="grp-count" x="0" y="${HEADER_H / 2 + 5}">${g.members.length} stabala</text>` +
+        `<text class="grp-count" x="0" y="${HEADER_H / 2 + 5}">${g.members.length} trees</text>` +
         `</g><g class="grp-content">${nodes}</g></g>`
       );
     })
     .join("\n");
 
   const legend = [...new Set(ids.map((id) => trees.get(id).fm.taxon))]
-    .sort((a, b) => TAXON_HR[a].localeCompare(TAXON_HR[b], "hr"))
+    .sort((a, b) => TAXON_LABEL[a].localeCompare(TAXON_LABEL[b], "en"))
     .map(
       (tx) =>
-        `<span class="lg"><i style="background:${TAXON_COLOR[tx]}"></i>${TAXON_HR[tx]}</span>`
+        `<span class="lg"><i style="background:${TAXON_COLOR[tx]}"></i>${TAXON_LABEL[tx]}</span>`
     )
     .join("");
 
   // Reading-state legend — the three outlines every node can wear.
   const stateLegend =
-    `<span class="lg"><i class="lgs lgs-done"></i>savladano</span>` +
-    `<span class="lg"><i class="lgs lgs-ready"></i>spremno za čitanje</span>` +
-    `<span class="lg"><i class="lgs lgs-not"></i>nije spremno</span>` +
+    `<span class="lg"><i class="lgs lgs-done"></i>mastered</span>` +
+    `<span class="lg"><i class="lgs lgs-ready"></i>ready to read</span>` +
+    `<span class="lg"><i class="lgs lgs-not"></i>not ready</span>` +
     `<span class="lgsep"></span>`;
 
   const kindsPresent = structure
-    ? Object.keys(KIND_HR).filter((k) => structure.arrows.some((a) => a.kind === k))
+    ? Object.keys(KIND_LABEL).filter((k) => structure.arrows.some((a) => a.kind === k))
     : [];
   // On a two-level canvas the registers come first: what a box is before what
   // an arrow is.
   const levelLegend = structure?.twoLevel
-    ? `<span class="lg"><i class="lgb lgb-kind"></i>${LEVEL_HR.kind}</span>` +
-      `<span class="lg"><i class="lgb lgb-inst"></i>${LEVEL_HR.instance}</span>` +
+    ? `<span class="lg"><i class="lgb lgb-kind"></i>${LEVEL_LABEL.kind}</span>` +
+      `<span class="lg"><i class="lgb lgb-inst"></i>${LEVEL_LABEL.instance}</span>` +
       `<span class="lgsep"></span>`
     : "";
   const kindLegend = levelLegend + kindsPresent
-    .map((k) => `<span class="lg"><i style="background:${KIND_COLOR[k]}"></i>${KIND_HR[k]}</span>`)
+    .map((k) => `<span class="lg"><i style="background:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]}</span>`)
     .join("");
-  const markers = Object.keys(KIND_HR)
+  const markers = Object.keys(KIND_LABEL)
     .map(
       (k) =>
         `<marker id="ah-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${KIND_COLOR[k]}"/></marker>`
@@ -938,13 +948,13 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
     nodes: nodeInfo,
     deps: depsOf,
     proofsOf: proofsOfObj,
-    // The Croatian word for every taxon the vault actually uses, so the filter
+    // The page's word for every taxon the vault actually uses, so the filter
     // tray can label a chip without a second table on the client.
     taxa: Object.fromEntries(
       [...new Set(ids.map((id) => trees.get(id).fm.taxon))]
-        .filter((tx) => TAXON_HR[tx])
-        .sort((a, b) => TAXON_HR[a].localeCompare(TAXON_HR[b], "hr"))
-        .map((tx) => [tx, TAXON_HR[tx]])
+        .filter((tx) => TAXON_LABEL[tx])
+        .sort((a, b) => TAXON_LABEL[a].localeCompare(TAXON_LABEL[b], "en"))
+        .map((tx) => [tx, TAXON_LABEL[tx]])
     ),
     geom: { NODE_W, NODE_H, PRF_W, PRF_H, HEADER_H, PAD, COLLAPSED_W },
     showExrDefault,
@@ -981,13 +991,13 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
         instances: structure.instances,
         theorems: structure.theorems,
         pos: structure.pos,
-        kinds: Object.keys(KIND_HR).map((k) => ({ id: k, hr: KIND_HR[k], color: KIND_COLOR[k] })),
+        kinds: Object.keys(KIND_LABEL).map((k) => ({ id: k, label: KIND_LABEL[k], color: KIND_COLOR[k] })),
         geom: { INST_H, INST_GAP },
         size: { w: structure.layout.w, h: structure.layout.h },
         ...(structure.twoLevel
           ? {
               twoLevel: true,
-              levels: LEVEL_HR,
+              levels: LEVEL_LABEL,
               reg: { title_h: REG_TITLE_H, pad: REG_PAD },
               // Each region's own origin: a dragged box is saved in the
               // coordinates `pos` is written in, which are its region's.
@@ -1005,7 +1015,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
   }`;
 
   return `<!doctype html>
-<html lang="hr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <link rel="icon" href="data:,">
@@ -1020,26 +1030,27 @@ ${clientCss()}</style>
 <div id="topbar">
   <h1>${escapeHtml(title)}</h1>
   <span class="sub">${escapeHtml(srcLine)}</span>
-${structure ? `  <div id="modes"><button class="mode on" data-mode="split">Jedno uz drugo</button><button class="mode" data-mode="plane">Jedna ploča</button></div>
-` : ""}  <input id="search" type="search" placeholder="Traži po naslovu ili id…">
-  <label><input type="checkbox" id="tglPrf"> Prikaži dokaze</label>
-  <label${exrCount ? "" : ' style="display:none"'}><input type="checkbox" id="tglExr"${showExrDefault ? " checked" : ""}> Prikaži zadatke${exrCount ? ` (${exrCount})` : ""}</label>
-  <button id="expandAll">Proširi sve</button>
-  <button id="collapseAll">Sažmi sve</button>
-  <div id="fbar"><button id="f-open">Filtri ▾</button><span id="f-count"></span><span id="f-state"></span><label><input type="checkbox" id="f-hide"> sakrij</label><button id="f-clear" hidden>Očisti filtar</button></div>
+  <div id="nav"><button id="nav-back" title="Back — one step back through the view (tree, filter, arrangement, definition)" disabled>←</button><button id="nav-fwd" title="Forward" disabled>→</button></div>
+${structure ? `  <div id="modes"><button class="mode on" data-mode="split">Side by side</button><button class="mode" data-mode="plane">One plane</button></div>
+` : ""}  <input id="search" type="search" placeholder="Search by title or id…">
+  <label><input type="checkbox" id="tglPrf"> Show proofs</label>
+  <label${exrCount ? "" : ' style="display:none"'}><input type="checkbox" id="tglExr"${showExrDefault ? " checked" : ""}> Show exercises${exrCount ? ` (${exrCount})` : ""}</label>
+  <button id="expandAll">Expand all</button>
+  <button id="collapseAll">Collapse all</button>
+  <div id="fbar"><button id="f-open">Filters ▾</button><span id="f-count"></span><span id="f-state"></span><label><input type="checkbox" id="f-hide"> hide</label><button id="f-clear" hidden>Clear filter</button></div>
   <div id="legend">${stateLegend}${legend}</div>
 ${structure ? `  <div id="slegend">${kindLegend}</div>
 ` : ""}</div>
 <div id="canvas">
   <section id="pane-order" class="pane">
-    <div class="pane-bar"><button class="pane-fold" data-pane="order" title="Sklopi ili rasklopi">▾</button><span class="pane-name">Redoslijed</span><span class="pane-sub">stabla i preduvjeti</span></div>
+    <div class="pane-bar"><button class="pane-fold" data-pane="order" title="Fold or unfold">▾</button><span class="pane-name">Order</span><span class="pane-sub">trees and prerequisites</span></div>
     <div class="pane-view" id="view-order">
       <svg id="svg"><g id="world"><g id="pareas"></g><g id="glayer">${groupSvgs}</g></g></svg>
     </div>
   </section>
-${structure ? `  <div id="divider" title="Povuci da promijeniš podjelu"></div>
+${structure ? `  <div id="divider" title="Drag to change the split"></div>
   <section id="pane-structure" class="pane">
-    <div class="pane-bar"><button class="pane-fold" data-pane="structure" title="Sklopi ili rasklopi">▾</button><span class="pane-name">Struktura</span><span class="pane-sub">vrste, primjeri i strelice</span></div>
+    <div class="pane-bar"><button class="pane-fold" data-pane="structure" title="Fold or unfold">▾</button><span class="pane-name">Structure</span><span class="pane-sub">kinds, instances and arrows</span></div>
     <div class="pane-view" id="view-structure">
       <svg id="svg2"><defs id="sdefs">${markers}</defs><g id="world2"><g id="slayer">${structureSvg(structure, trees)}</g></g></svg>
       <div id="slabels"></div>
@@ -1048,11 +1059,11 @@ ${structure ? `  <div id="divider" title="Povuci da promijeniš podjelu"></div>
 ` : ""}</div>
 <div id="ftray" hidden></div>
 <div id="f-none" hidden></div>
-<aside id="panel"><button id="close" title="Zatvori">×</button><div id="panel-body"></div></aside>${hasCd ? `
-<div id="strip" class="empty"><div class="strip-bar"><button id="strip-toggle" class="strip-title">▾ Dijagrami <span id="strip-count"></span></button><div id="strip-tabs"></div></div><div id="strip-body"></div></div>` : ""}${twoLevel ? `
-<div id="focusbar" hidden><span id="fb-what"></span><button id="fb-back">Natrag na cijeli graf</button></div>
-<div id="layoutbar" hidden><span id="lb-msg"></span><button id="lb-save" hidden>Spremi razmještaj</button><button id="lb-copy">Kopiraj</button><a id="lb-dl" download="structure-layout.json">Preuzmi</a><button id="lb-undo">Poništi pomake</button><textarea id="lb-json" readonly hidden></textarea></div>` : ""}
-<div id="footer"><span>Generirano ${escapeHtml(forest.created ?? "")} · forest-digest · klik na grupu otvara/zatvara, klik na karticu otvara sadržaj</span>${twoLevel ? `<span id="shint">Struktura: povuci kutiju da je premjestiš · klik na kutiju otvara sadržaj · klik na vrstu pokazuje njezin definicijski dijagram · prazna podloga pomiče platno</span>` : ""}<button id="resetProg">Poništi napredak</button><span id="storage-note"></span></div>
+<aside id="panel"><button id="close" title="Close">×</button><div id="panel-body"></div></aside>${hasCd ? `
+<div id="strip" class="empty"><div class="strip-bar"><button id="strip-toggle" class="strip-title">▾ Diagrams <span id="strip-count"></span></button><div id="strip-tabs"></div></div><div id="strip-body"></div></div>` : ""}${twoLevel ? `
+<div id="focusbar" hidden><span id="fb-what"></span><button id="fb-back">Back to the whole graph</button></div>
+<div id="layoutbar" hidden><span id="lb-msg"></span><button id="lb-save" hidden>Save arrangement</button><button id="lb-copy">Copy</button><a id="lb-dl" download="structure-layout.json">Download</a><button id="lb-undo">Undo moves</button><textarea id="lb-json" readonly hidden></textarea></div>` : ""}
+<div id="footer"><span>Generated ${escapeHtml(forest.created ?? "")} · forest-digest · click a group to open or close it, click a card to open its content — clicking the same card again closes it (so does Esc)</span>${twoLevel ? `<span id="shint">Structure: drag a box to move it · click a box to open its content, click again to close · click a kind to see its defining diagram · empty background pans the canvas · dimmed things stay clickable</span>` : ""}<button id="resetProg">Reset progress</button><span id="storage-note"></span></div>
 <script>window.FOREST = ${dataJson};</script>
 <script>window.TREES = ${contentJson};</script>
 ${structure ? `<script>window.STRUCTURE = ${structureJson};</script>
@@ -1105,27 +1116,32 @@ function mermaidId(id) {
 function buildDagMd(vault, edges, groups) {
   const { trees, forest } = vault;
   const lines = [];
-  lines.push("# Graf ovisnosti");
+  lines.push("# Dependency graph");
   lines.push("");
+  // dag.md and by-concept.md are Obsidian notes that sit among the vault's own
+  // trees, which is why their prose used to follow the trees into Croatian.
+  // They are the page's chrome in another file, though — and the last Croatian
+  // a reader could reach — so they follow the page instead. What they LIST is
+  // still the vault's own: titles, section names and ids keep their language.
   lines.push(
-    "> [!TIP] Ovo je statični Obsidian-prikaz. **Interaktivni prikaz** — sklopive cjeline, označavanje napretka (savladano / spremno / nije spremno), pretraga — je `views/forest.html`: otvori ga **u pregledniku** (dvoklik u file manageru), ne u Obsidianu."
+    "> [!TIP] This is the static Obsidian view. The **interactive view** — collapsible sections, progress marks (*mastered* / *ready to read* / *not ready*), search — is `views/forest.html`: open it **in a browser** (double-click it in a file manager), not in Obsidian."
   );
   lines.push("");
   lines.push(
-    "Bridovi su `depends` veze: strelica vodi od preduvjeta prema stablu",
-    "koje ga treba. Graf je tranzitivno reduciran — brid koji slijedi iz",
-    "duljeg puta je izostavljen. Dokazi (`prf-`) i zadatci (`exr-`) su",
-    "izostavljeni radi čitljivosti; potpuni interaktivni prikaz je",
+    "Edges are `depends` links: the arrow runs from the prerequisite to the",
+    "tree that needs it. The graph is transitively reduced — an edge that",
+    "follows from a longer path is left out. Proofs (`prf-`) and exercises",
+    "(`exr-`) are left out for legibility; the full interactive view is",
     "`views/forest.html`."
   );
   lines.push("");
-  lines.push(`*(Generirano ${forest.created ?? ""} alatom forest-digest.)*`);
+  lines.push(`*(Generated ${forest.created ?? ""} by forest-digest.)*`);
 
   const shown = (id) =>
     !["proof", "exercise"].includes(trees.get(id).fm.taxon);
 
   // Group overview: aggregated, deduplicated edges between sections.
-  lines.push("", "## Pregled po cjelinama", "");
+  lines.push("", "## Overview by section", "");
   lines.push("```mermaid", "graph TD");
   for (const g of groups) {
     lines.push(`    g${g.id}["${g.title} (${g.members.length})"]`);
@@ -1147,7 +1163,7 @@ function buildDagMd(vault, edges, groups) {
     const members = g.members.filter(shown);
     lines.push("", `## ${g.title}`, "");
     if (members.length === 0) {
-      lines.push("*(samo dokazi/zadatci — vidi forest.html)*");
+      lines.push("*(proofs and exercises only — see forest.html)*");
       continue;
     }
     const chunks = [];
@@ -1180,12 +1196,13 @@ function buildDagMd(vault, edges, groups) {
 function buildByConceptMd(vault, groups, proofsOf) {
   const { trees } = vault;
   const lines = [];
-  lines.push("# Stabla po konceptima");
+  lines.push("# Trees by concept");
   lines.push("");
   lines.push(
-    "Vault izvrnut kroz registar koncepata (`library/concepts/concepts.yaml`):",
-    "pod svakim konceptom stoje stabla koja ga *uče* (`teaches`). Dokazi ne",
-    "uče nove koncepte pa stoje uz svoje teoreme."
+    "The vault inverted through the concept registry",
+    "(`library/concepts/concepts.yaml`): under each concept stand the trees",
+    "that *teach* it (`teaches`). Proofs teach no new concepts, so they stand",
+    "beside their theorems."
   );
 
   // Concepts in order of first appearance walking the groups (index order),
@@ -1211,7 +1228,7 @@ function buildByConceptMd(vault, groups, proofsOf) {
       let line = `- [[${id}]] (${t.fm.taxon})`;
       const prfs = proofsOf.get(id);
       if (prfs?.length) {
-        line += ` — dokazi: ${prfs.map((p) => `[[${p}]]`).join(", ")}`;
+        line += ` — proofs: ${prfs.map((p) => `[[${p}]]`).join(", ")}`;
       }
       lines.push(line);
     }

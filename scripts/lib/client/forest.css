@@ -44,7 +44,12 @@ svg { width: 100%; height: 100%; display: block; }
 .node.st-done:hover rect:first-of-type { fill: color-mix(in srgb, var(--st-done) 18%, var(--card)); }
 .node.st-ready rect:first-of-type { stroke: var(--st-ready); stroke-width: 1.6; fill: color-mix(in srgb, var(--st-ready) 8%, var(--card)); }
 .node.st-ready:hover rect:first-of-type { fill: color-mix(in srgb, var(--st-ready) 16%, var(--card)); }
+/* Not-ready is information, never a gate: the card is dimmer, and hovering it
+   comes all the way back, because a reader who wants to read ahead of the DAG
+   outranks the DAG. Only the ORDER graph wears these three states at all — the
+   structure canvas is scoped out of them in applyStates. */
 .node.st-not { opacity: 0.55; }
+.node.st-not:hover { opacity: 1; }
 .group.g-done .grp-box { stroke: var(--st-done); stroke-width: 1.6; }
 .group.g-ready .grp-box { stroke: var(--st-ready); stroke-width: 1.6; }
 .group.g-muted { opacity: 0.65; }
@@ -111,7 +116,16 @@ svg { width: 100%; height: 100%; display: block; }
 .mp-actions { margin-top: 8px; display: flex; gap: 8px; }
 .mp-actions button { background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .mp-actions button:hover { background: var(--card-hi); }
-/* --- Struktura: the arrangement switch, kind legend, boxes, edges, labels --- */
+/* The trail: one step back through what the page is showing. It wears the
+   arrangement switch's clothes because it is the same kind of control — a
+   setting of the whole view, not an action on one tree. */
+#nav { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+#nav button { background: var(--card); color: var(--fg-muted); border: none; border-radius: 0; padding: 4px 10px; font-size: 13px; line-height: 1.1; cursor: pointer; }
+#nav button + button { border-left: 1px solid var(--border); }
+#nav button:hover:not(:disabled) { color: var(--fg); background: var(--card-hi); }
+/* Nowhere to go is said by the control, not discovered by clicking it. */
+#nav button:disabled { opacity: .35; cursor: default; }
+/* --- Structure: the arrangement switch, kind legend, boxes, edges, labels --- */
 #modes { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 #modes .mode { background: var(--card); color: var(--fg-muted); border: none; border-radius: 0; padding: 5px 12px; font-size: 13px; cursor: pointer; }
 #modes .mode + .mode { border-left: 1px solid var(--border); }
@@ -165,7 +179,7 @@ body.has-struct:not(.fold-structure) #slegend { display: flex; }
 .smuted { color: var(--fg-muted); font-size: 13px; }
 /* Four cells in a row are as wide as the panel; the figure's side padding would make it scroll. */
 .struct-chain .cd { padding-left: 0; padding-right: 0; }
-/* --- Dijagrami: the bottom strip --- */
+/* --- Diagrams: the bottom strip --- */
 #strip { position: fixed; left: 0; right: 0; bottom: 40px; z-index: 15; background: var(--panel); border-top: 1px solid var(--border); }
 #panel.open ~ #strip { right: min(480px, 90vw); }
 #strip .strip-bar { display: flex; gap: 8px; align-items: center; padding: 4px 12px; flex-wrap: wrap; }
@@ -203,8 +217,14 @@ body.has-struct:not(.fold-structure) #slegend { display: flex; }
 #slegend .lgb-inst { background: color-mix(in srgb, #e9d66b 13%, var(--card-hi)); border-style: dashed; border-color: #e9d66b; }
 #shint { display: none; }
 body.has-struct:not(.fold-structure) #shint { display: inline; }
-/* Zoomed into one definition: everything else stays on screen, out of the way. */
-body.sfocus .off { opacity: 0.08; pointer-events: none; }
+/* Zoomed into one definition: everything else stays on screen, out of the way —
+   and still takes a click. Two dimmings that look identical have to answer a
+   click identically, or the reader is left to tell them apart by trying them:
+   so clicking something faded here leaves the diagram and opens what was
+   clicked, exactly as a filtered-out box does. */
+body.sfocus .off { opacity: 0.08; }
+body.sfocus .sbox.off:hover, body.sfocus .slabel.off:hover { opacity: 0.75; }
+body.sfocus .sedge.off:hover { opacity: 0.6; }
 #focusbar, #layoutbar { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 24; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: min(760px, 92vw); padding: 7px 12px; font-size: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
 #focusbar[hidden], #layoutbar[hidden] { display: none; }
 #layoutbar.err { border-color: #e07a6a; }
@@ -280,16 +300,27 @@ body.one-plane #pane-order > .pane-bar { display: none; }
 .node.fmatch rect:first-of-type { stroke: var(--accent); stroke-width: 2; }
 .node.flink rect:first-of-type { stroke: #a678c8; stroke-width: 2.2; }
 .node.fmatch, .node.flink { opacity: 1; }
+/* Dimming is an answer, not a lock. Every rule here is opacity ALONE: a
+   filtered-out box, edge or label still takes a click, still opens its panel
+   and still drags, because the reader who can see a thing expects to be able
+   to reach it — and the filter is a hint about where to look, not a verdict on
+   what may be touched. `hide` is the mode for taking something away. */
 .node.fdim { opacity: 0.07; }
 /* The structure box carries .fdim on its outer group and had no rule at all,
    so a filtered-out box stayed at full strength and the canvas never
    quietened. It is the thing the eye lands on, so it goes dimmest. */
-.sbox.fdim { opacity: 0.08; pointer-events: none; }
+.sbox.fdim { opacity: 0.08; }
+/* Dimmed to 0.07 a box gives the pointer nothing to aim at, so hovering one
+   brings it most of the way back — the hit area was always there, and this is
+   what says so. */
+.node.fdim:hover, .sbox.fdim:hover, .slabel.fdim:hover { opacity: 0.75; }
+.sedge.fdim:hover, .stie.fdim:hover { opacity: 0.6; }
 .fhide { display: none; }
-.sedge.fdim, .stie.fdim, .ssym.fdim, .slabel.fdim { opacity: 0.05; pointer-events: none; }
+.sedge.fdim, .stie.fdim, .ssym.fdim, .slabel.fdim { opacity: 0.05; }
 /* A region frame is the map's furniture: it fades, but staying legible is
-   what tells the reader where on the map the few lit things are. */
-.sregion.fdim { opacity: 0.16; pointer-events: none; }
+   what tells the reader where on the map the few lit things are. Under `hide`
+   it takes the .fhide rule above like everything else — see paintFilter. */
+.sregion.fdim { opacity: 0.16; }
 .sedge.fmatch .line { stroke-width: 3.2; }
 .sedge.flink .line { stroke-width: 3.6; }
 .sedge.flink .line, .slabel.flink { filter: drop-shadow(0 0 3px #a678c8); }

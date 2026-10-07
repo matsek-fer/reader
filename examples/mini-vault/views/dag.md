@@ -1,16 +1,16 @@
-# Graf ovisnosti
+# Dependency graph
 
-> [!TIP] Ovo je statični Obsidian-prikaz. **Interaktivni prikaz** — sklopive cjeline, označavanje napretka (savladano / spremno / nije spremno), pretraga — je `views/forest.html`: otvori ga **u pregledniku** (dvoklik u file manageru), ne u Obsidianu.
+> [!TIP] This is the static Obsidian view. The **interactive view** — collapsible sections, progress marks (*mastered* / *ready to read* / *not ready*), search — is `views/forest.html`: open it **in a browser** (double-click it in a file manager), not in Obsidian.
 
-Bridovi su `depends` veze: strelica vodi od preduvjeta prema stablu
-koje ga treba. Graf je tranzitivno reduciran — brid koji slijedi iz
-duljeg puta je izostavljen. Dokazi (`prf-`) i zadatci (`exr-`) su
-izostavljeni radi čitljivosti; potpuni interaktivni prikaz je
+Edges are `depends` links: the arrow runs from the prerequisite to the
+tree that needs it. The graph is transitively reduced — an edge that
+follows from a longer path is left out. Proofs (`prf-`) and exercises
+(`exr-`) are left out for legibility; the full interactive view is
 `views/forest.html`.
 
-*(Generirano 2026-09-07 alatom forest-digest.)*
+*(Generated 2026-09-07 by forest-digest.)*
 
-## Pregled po cjelinama
+## Overview by section
 
 ```mermaid
 graph TD

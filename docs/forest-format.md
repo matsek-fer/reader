@@ -726,16 +726,16 @@ DAG over all trees, `pt` never among them.
   dropped, is dropped with a note. `pos` and `region` carry over as they
   are.
 - `scripts/build-views.mjs` gives a vault with objects a second graph,
-  *Struktura*, beside the requirements one — two panes by default, either
+  *Structure*, beside the requirements one — two panes by default, either
   foldable, or both on one shared plane: objects as boxes, arrows coloured by kind (a hom is
-  *morfizam*), an inverse pair as one two-headed edge whose labels are
+  *morphism*), an inverse pair as one two-headed edge whose labels are
   joined by ⇄, or by ≅ when either side has `up_to`. A loop is an arc on
   its box and a chain on its page. A typed object's page links its type
-  (*Isti tip kao*), shows the inherited `hom` and lists the type's
-  constructions (*Strelice tipa*); an arrow's page shows *Izomorfizam* for
-  `invertible` and *Inverz (do na kanonski izomorfizam)* with the `up_to`
-  tree; any tree's page shows *Pretpostavlja* for `assumes`. In a 0.3 vault
-  the same tab draws both levels: a kind's page lists its instances and its
+  (*Same type as*), shows the inherited `hom` and lists the type's
+  constructions (*Arrows of the type*); an arrow's page shows *Isomorphism* for
+  `invertible` and *Inverse (up to canonical isomorphism)* with the `up_to`
+  tree; any tree's page shows *Assumes* for `assumes`. In a 0.3 vault
+  the same pane draws both levels: a kind's page lists its instances and its
   defining diagram, an instance's page its kind and its `values`, the canvas
   is divided into the declared [regions](#regions--subgraphs-that-read-on-their-own),
   and an authored [`pos`](#layout--authored-positions) is honoured where it
@@ -1145,19 +1145,38 @@ in its output is `forest.json`'s `created`).
   longest-path layering, barycenter crossing-reduction, fixed x/y
   coordinates — never by a client library. The page draws no dependency
   arrows; the `depends` DAG surfaces instead as **reading states**. Every
-  tree wears one of three outlines: *savladano* (the reader marked it
-  understood, from the side panel), *spremno* (every id in its full,
-  unreduced `depends` list is savladano — vacuously true for roots) and
-  *nije spremno* (otherwise). Marks live only in the browser's
+  tree wears one of three outlines: *mastered* (the reader marked it
+  understood, from the side panel), *ready to read* (every id in its full,
+  unreduced `depends` list is mastered — vacuously true for roots) and
+  *not ready* (otherwise). **Readiness belongs to the Order graph
+  alone**: a box on the Structure canvas is a structure, not a reading
+  assignment, so that canvas shows everything at full strength and is
+  quietened only by a filter. And readiness is information, never a gate —
+  every card answers a click whatever state it wears, a *not ready* card
+  brightens on hover to say so, and the panel refuses nothing on readiness
+  grounds (marking a tree whose prerequisites are unread is allowed, with a
+  note; the reader outranks the DAG). Marks live only in the browser's
   `localStorage`, keyed by the vault's `source.title` + `created`, so the
   generated file itself stays deterministic; a footer control resets
   progress, and marking a merely-ready tree first offers a `/tutor`
   self-check. The `index.md` sections are collapsible groups (collapsed:
-  one bar with title and "N/M savladano" progress wearing the same three
+  one bar with title and "N/M mastered" progress wearing the same three
   outlines; expanded: the trees laid out inside); proofs fold under their
-  statements behind a "Prikaži dokaze" toggle, exercises behind "Prikaži
-  zadatke" (off by default when the vault has more than 8); clicking a
+  statements behind a "Show proofs" toggle, exercises behind "Show
+  exercises" (off by default when the vault has more than 8); clicking a
   tree opens its full content in a side panel with an `obsidian://` link.
+  **The page's own words are English**, whatever language the vault is in:
+  the chrome — pane names, legends, panel row keys, the filter bar, the
+  footer hint — is one fixed vocabulary, while every tree title, body and
+  region name stays exactly as the vault authored it, so a Croatian vault
+  reads as Croatian mathematics inside an English frame. The one deliberate
+  exception is the `/tutor` self-check phrase the panel offers to copy: it
+  becomes model input and seeds the session's language, so it follows the
+  tree's own `language` (or the vault's) rather than the chrome. The two
+  generated Obsidian notes, `dag.md` and `by-concept.md`, say the same: their
+  own prose — headings, the tip pointing at `forest.html`, the note that a
+  section holds only proofs — is English, while every title, section name and
+  id they list is the vault's.
   The validator treats `forest.html` as optional — old vaults without it
   remain valid — but when the file exists it must be non-empty.
 
@@ -1169,8 +1188,8 @@ never hears of it renders exactly as before.
 
 A vault's canvas outgrows the eye before it outgrows the mathematics — the
 Monsky vault draws 45 edges over 53 boxes — and the two graphs a reader already
-has are *themselves* filters over one body of material: *Redoslijed* keeps the
-`depends` DAG, *Struktura* keeps the arrows. So the primitive is a **filter**,
+has are *themselves* filters over one body of material: *Order* keeps the
+`depends` DAG, *Structure* keeps the arrows. So the primitive is a **filter**,
 the ready-made chips in the page's top bar are stored expressions and nothing
 more, and a later natural-language layer needs no new machinery: it emits an
 expression and calls the same entry point the chips call.
@@ -1195,7 +1214,7 @@ conjunction; `{"and": []}` is everything and `{"or": []}` nothing.
 | `kind-of` | `<obj- id>` | The instances of that kind. |
 | `arrow-kind` | one of the eight [kinds](#morphisms--mor--taxon-morphism) | Arrows of that kind. |
 | `tied-to` | `<obj- or mor- id>` | Everything attached to one structure: the box itself, its arrows in and out, its instances (or, from an instance, its kind), the entries of its [defining diagram](#a-kind-is-defined-by-a-diagram--data), and then every arrow whose two ends are already in the set — which is what makes a kind's neighbourhood read as a picture instead of a star. From an arrow: the arrow and its two ends. |
-| `in-data-of` | `<obj- id>` | One kind's defining diagram — the kind, the ids its `data` lists, and the ends of the arrows it lists. The same set the panel's *Prikaži definiciju na platnu* button focuses. |
+| `in-data-of` | `<obj- id>` | One kind's defining diagram — the kind, the ids its `data` lists, and the ends of the arrows it lists. The same set the panel's *Show the definition on the canvas* button focuses. |
 | `region` | `<kebab token>` | Trees and boxes carrying that [`region`](#regions--subgraphs-that-read-on-their-own), plus an arrow with no region of its own whose two ends are both inside it. |
 | `about` | `<id of any tree>` | The [`about`](#about-fields-and-assumes--any-tree) neighbourhood, **symmetric**: the id itself, what its `about` names, and every tree whose `about` names it. One predicate therefore serves both directions of the bridge between the requirements DAG and the structure graph. |
 | `taxon` | one of the sixteen taxa | Trees of that taxon. |
@@ -1206,19 +1225,56 @@ Combinators are `and` (array), `or` (array) and `not` (one expression, or an
 array read as `not and`). Nesting is the only precedence there is; a multi-key
 object binds as one conjunction inside whatever encloses it.
 
+**The endpoint closure.** After the expression has been evaluated, and before
+anything is counted, one rule is applied to the finished set: **an arrow in the
+set brings both of its endpoint objects in with it.** An arrow *is* a statement
+about two objects, so a result that lights the arrow and one end is showing
+half a sentence — and it reads as a bug whatever the predicate meant by it.
+`{"about": "thm-chevalley"}` is the case that gave this away: the theorem's
+`about` named the valuation and the arrow to its value group but not the value
+group itself, and the reader was left looking at a lit arrow with one dim end.
+
+The closure is **one-way**: lighting a box does *not* drag in its arrows.
+Everything in a real vault touches an arrow, so the reverse direction would
+turn any filter into the whole canvas; `tied-to` is the predicate for a reader
+who wants a box's neighbourhood, and it asks. The closure is idempotent (an
+endpoint is an object, and objects pull in nothing), it skips an end that is no
+tree of this vault (0.2's `pt`), and it changes nothing under `level`, which
+already demanded both ends. The bar's `boxes N · arrows N · trees N` counts
+the set **after** the closure, because those numbers are a promise about what is
+lit on the screen rather than about what the predicate said.
+
 A value outside a closed set (`level`, `arrow-kind`, `taxon`) and an unknown
-predicate are **refused**, with a Croatian message, and the view is left
+predicate are **refused**, with a message saying what is wrong, and the view is left
 untouched — a half-understood filter would be a lie about the vault. An id that
 resolves to nothing is only *noted*: the filter stands and matches nothing.
 When a legal expression matches nothing at all, the page says so and again
 leaves the view alone, because an empty canvas reads as a broken page.
 
-The match is **highlighted and the rest dimmed**; a *sakrij* toggle switches
+The match is **highlighted and the rest dimmed**; a *hide* toggle switches
 dimming for hiding. Nothing is destroyed either way — clearing restores the
 view exactly. Alongside it runs one more channel: picking a tree lights, in the
 structure graph, the objects and arrows its `about` names, and picking a box or
 an arrow lights the trees that name it. Both are the `about` predicate, and
 both survive folding a pane or changing arrangement.
+
+**Dimming is an answer, not a lock.** Everything dimmed stays live: a filtered-
+out box, card, arrow or label still takes a click, still opens its panel and
+still drags, and hovering one brings it most of the way back so there is
+something to aim at. The filter is a hint about where to look, never a verdict
+on what may be touched — *hide* is the mode for taking something away, and a
+hidden thing needs no pointer events because it is not on screen. The region
+frames obey both modes: a frame with nothing lit inside it fades but stays
+legible while dimming, because *where* on the map the few lit things sit is
+most of what there is left to see, and it goes away entirely under *hide*,
+which would otherwise leave empty outlines on an empty canvas.
+
+The one other place the canvas fades — zooming to a kind's defining diagram
+with the panel's *Show the definition on the canvas* — keeps the same promise:
+clicking something it faded out leaves the diagram and opens what was clicked,
+because two pictures that dim alike have to answer a click alike. The view does
+not jump back there, so the box stays under the cursor that chose it; the focus
+bar's *Back to the whole graph* is the exit that restores the pan and zoom.
 
 **Driving it from outside.** The page exposes `window.forestFilter`:
 
@@ -1229,21 +1285,59 @@ both survive folding a pane or changing arrangement.
 | `hide(on)` | Switches dimming for hiding. |
 | `link(id)` | Lights one id's `about` neighbourhood — the cross-link, driven from outside. |
 | `select(id)` | Opens a tree's panel, as a click would. |
+| `close()` | Closes the panel and deselects — what clicking the open card again does. |
 | `arrangement(next)` | `"split"` (two panes) or `"plane"` (one shared plane); with no argument, reports the current one. |
-| `describe()` | The current state **and the grammar**: every predicate with its argument, plus this vault's own vocabulary — its regions, the arrow kinds it actually uses, its objects and arrows with their levels and ends. This is the call a natural-language layer makes first: with it a model can write a valid expression for a vault it has not read. |
+| `back()` / `forward()` | One step along the trail below. Asynchronous: the step goes through the browser's own history, so the page cannot observe it in the same turn. |
+| `describe()` | The current state **and the grammar**: every predicate with its argument, plus this vault's own vocabulary — its regions, the arrow kinds it actually uses, its objects and arrows with their levels and ends, and the trail (`history.at`, `history.depth`). This is the call a natural-language layer makes first: with it a model can write a valid expression for a vault it has not read. |
 
 **And from a link.** The page reads its own URL hash, so a skill can open a
-vault already filtered:
+vault already filtered, already on a tree, already looking at one definition:
 
 ```
-views/forest.html#filter=%7B%22tied-to%22%3A%22obj-valuation%22%7D&hide=1&mode=plane
+views/forest.html#filter=%7B%22tied-to%22%3A%22obj-valuation%22%7D&hide=1&mode=plane&tree=thm-monsky
 ```
 
 `filter` is a URL-encoded JSON expression; `hide=1` hides instead of dimming;
 `mode=plane` or `mode=split` picks the arrangement; `pane=structure` or
-`pane=order` folds the other one away. The page writes the same hash back as
-the reader filters, so the URL in the address bar is always the filter they are
-looking at, ready to paste to somebody else.
+`pane=order` folds the other one away; `tree=<id>` opens that tree in the side
+panel; `focus=<obj- id>` zooms the canvas to that kind's defining diagram. The
+page writes the same hash back as the reader works, so the URL in the address
+bar is always the view they are looking at, ready to paste to somebody else.
+The hash is read last, once the whole page exists to be put into that state.
+
+### Stepping back — the view's own history
+
+The reader accumulates state as they explore, and until now nothing undid it.
+The top bar carries **← →**, and the browser's own Back walks the same trail.
+
+**One step is one change to what the page is SHOWING.** Six things qualify:
+
+| recorded as a step | not a step |
+|---|---|
+| opening a tree in the panel, and closing it | panning and zooming |
+| applying, changing or clearing the filter | typing in the search box |
+| the *hide* switch | expanding or collapsing a section |
+| the arrangement (*side by side* ↔ *one plane*) | the proof and exercise toggles |
+| folding a pane | dragging a box |
+| focusing a kind's defining diagram, and leaving it | marking a tree *mastered* |
+
+The right-hand column is either continuous, or a way of looking at one state,
+or an **edit** — and a Back button that silently undid a reading mark would be
+a different and far more dangerous promise than this one. The link highlight is
+not in the left column either, because it is not independent: it is whatever
+the open tree's `about` names, so it follows the tree for free.
+
+A step that lands on the state the page is already in is dropped, so clicking
+the same chip twice leaves one entry rather than three. Stepping back and then
+somewhere new discards what was ahead, as a browser does.
+
+Each step is pushed as a real history entry carrying its sequence number, and
+`popstate` looks that number up — which is why the address bar and the bar's
+own buttons can never disagree, and why **Back works after a reload** (the hash
+alone carries enough to rebuild the state). A browser that refuses `pushState`
+on a `file://` page costs only the address bar: the trail is held in the page,
+and **← →** still step. The first entry is written with `replaceState`, so Back
+can never walk out of the vault.
 
 The evaluator is `scripts/lib/filter.mjs` — one file for two consumers, unit
 tested in Node (`scripts/lib/filter.test.mjs`) and inlined into the page by

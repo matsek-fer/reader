@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildGraph, evaluate, parseExpr, describeExpr, problemText, chipsFor, vocabulary,
-  PREDICATES, ARROW_KINDS,
+  closeEndpoints, PREDICATES, ARROW_KINDS,
 } from "./filter.mjs";
 
 // A vault in miniature, shaped like the Monsky one: a valuation kind defined by
@@ -103,25 +103,34 @@ test("kind-of: the instances of one kind, and nothing of another", () => {
   assert.deepEqual(hit({ "kind-of": "obj-nat" }), []);
 });
 
-test("arrow-kind: one kind of arrow, never a box", () => {
-  assert.deepEqual(hit({ "arrow-kind": "hom" }), ["mor-embed", "mor-v"]);
-  assert.deepEqual(hit({ "arrow-kind": "data" }), ["mor-value-group"]);
+// The predicate picks arrows alone; the endpoint closure then lights their ends,
+// because an arrow with one end dim is half a sentence on the screen.
+test("arrow-kind: one kind of arrow, and the boxes it joins", () => {
+  assert.deepEqual(hit({ "arrow-kind": "hom" }),
+    ["mor-embed", "mor-v", "obj-a-field", "obj-gamma", "obj-k-prime"]);
+  assert.deepEqual(hit({ "arrow-kind": "data" }),
+    ["mor-value-group", "obj-ordered-group", "obj-valuation"]);
   assert.deepEqual(hit({ "arrow-kind": "construction" }), []);
 });
 
 test("tied-to a kind: its arrows, its diagram, and the arrows inside the set", () => {
   // obj-field has three instances; mor-embed joins two of them, so it is tied
-  // to the kind even though neither of its ends IS the kind.
+  // to the kind even though neither of its ends IS the kind. obj-nat and
+  // obj-valuation come in through the closure: they are the far ends of
+  // mor-units and mor-forget, the two arrows that touch obj-field.
   assert.deepEqual(hit({ "tied-to": "obj-field" }), [
     "mor-embed", "mor-forget", "mor-units",
-    "obj-a-field", "obj-field", "obj-k-prime", "obj-reals",
+    "obj-a-field", "obj-field", "obj-k-prime", "obj-nat", "obj-reals", "obj-valuation",
   ]);
   // The valuation's own neighbourhood: its defining diagram plus the two
-  // arrows out of it. mor-embed stays out — obj-k-prime is not in the set.
+  // arrows out of it, with the far ends of those two (obj-field and
+  // obj-ordered-group) brought in by the closure. mor-embed stays out — it
+  // touches nothing in the set, and a box never drags in its own arrows.
   assert.deepEqual(hit({ "tied-to": "obj-valuation" }), [
     "mor-forget", "mor-v", "mor-value-group",
-    "obj-a-field", "obj-gamma", "obj-valuation",
+    "obj-a-field", "obj-field", "obj-gamma", "obj-ordered-group", "obj-valuation",
   ]);
+  assert.ok(hit({ "tied-to": "obj-valuation" }).indexOf("mor-embed") < 0);
 });
 
 test("tied-to an instance reaches its kind; tied-to an arrow is the arrow and its ends", () => {
@@ -152,17 +161,77 @@ test("region: boxes and trees that say so, plus an arrow drawn wholly inside", (
 });
 
 test("about, forwards: from a tree to the structure it concerns", () => {
+  // The theorem's `about` names obj-valuation and mor-value-group but not
+  // obj-ordered-group, the arrow's far end — which is exactly how the reader
+  // ended up looking at a lit arrow with one dim end. The closure supplies it.
   assert.deepEqual(hit({ about: "thm-chevalley" }),
-    ["mor-value-group", "obj-valuation", "thm-chevalley"]);
+    ["mor-value-group", "obj-ordered-group", "obj-valuation", "thm-chevalley"]);
   assert.deepEqual(hit({ about: "lem-sperner" }), ["lem-sperner", "obj-nat"]);
 });
 
 test("about, backwards: from an object or arrow to the trees that name it", () => {
   assert.deepEqual(hit({ about: "obj-valuation" }), ["obj-valuation", "thm-chevalley"]);
-  assert.deepEqual(hit({ about: "mor-value-group" }), ["mor-value-group", "thm-chevalley"]);
+  assert.deepEqual(hit({ about: "mor-value-group" }),
+    ["mor-value-group", "obj-ordered-group", "obj-valuation", "thm-chevalley"]);
   assert.deepEqual(hit({ about: "obj-nat" }), ["lem-sperner", "obj-nat"]);
   // A tree nobody is about and that is about nothing keeps only itself.
   assert.deepEqual(hit({ about: "prf-chevalley" }), ["prf-chevalley"]);
+});
+
+// The owner's report: "sometimes a morphism is included, one of its endpoints
+// is also included but not the other". Every arrow on the screen must stand
+// between two lit boxes, so the closure runs over the finished set — which
+// makes it hold for every predicate at once, and for any added later.
+test("a lit arrow lights both of its ends, and the counts say so", () => {
+  const twoEnded = (expr) => {
+    const r = evaluate(expr, G);
+    const bad = Object.keys(r.ids).filter((id) => {
+      const n = G.node[id];
+      if (n.taxon !== "morphism") return false;
+      return [n.from, n.to].some((end) => G.node[end] && !r.ids[end]);
+    });
+    assert.deepEqual(bad, [], "one-ended arrows under " + JSON.stringify(expr));
+    return r;
+  };
+  // Before the closure this expression was the owner's screenshot: the arrow
+  // lit, obj-valuation lit, obj-ordered-group left dim.
+  const r = twoEnded({ about: "thm-chevalley" });
+  // The bar's "boxes · arrows · trees" counts what is lit, closure included.
+  assert.deepEqual(r.count, { objects: 2, arrows: 1, trees: 1, total: 4 });
+  assert.equal(Object.keys(r.ids).length, r.count.total);
+  // Every chip the tray can offer, and every predicate that selects arrows.
+  for (const c of chipsFor(G, {})) twoEnded(c.expr);
+  for (const k of G.arrowKinds) twoEnded({ "arrow-kind": k });
+  for (const id of G.arrows) twoEnded({ id });
+  twoEnded({ taxon: "morphism" });
+  twoEnded({ text: "the" });
+  twoEnded({ not: { taxon: "object" } });
+});
+
+test("the closure is idempotent, and does not run backwards", () => {
+  // Re-running it over its own output adds nothing: an end is an object, and
+  // objects drag in nothing.
+  const first = evaluate({ about: "thm-chevalley" }, G);
+  const again = closeEndpoints(first.ids, G);
+  assert.deepEqual(again, []);
+  // Backwards would be the ruinous direction: in a real vault every box
+  // touches an arrow, so lighting a box must not light its arrows — that is
+  // what `tied-to` is for, and it asks.
+  assert.deepEqual(hit({ id: "obj-a-field" }), ["obj-a-field"]);
+  assert.deepEqual(hit({ taxon: "object" }).length, 8);
+  assert.deepEqual(hit({ "kind-of": "obj-field" }),
+    ["obj-a-field", "obj-k-prime", "obj-reals"]);
+  // `level` already demanded both ends, so the closure changes nothing there.
+  assert.deepEqual(hit({ level: "kind" }), [
+    "mor-forget", "mor-units", "mor-value-group",
+    "obj-field", "obj-nat", "obj-ordered-group", "obj-valuation",
+  ]);
+  // An end that is no tree of this vault (0.2's `pt`) is nothing to light.
+  const g = buildGraph({
+    nodes: { "obj-k": { taxon: "object", title: "A field" }, "mor-ex": { taxon: "morphism", title: "An example" } },
+    structure: { objects: [{ id: "obj-k" }], arrows: [{ id: "mor-ex", kind: "instance", from: "pt", to: "obj-k" }] },
+  });
+  assert.deepEqual(hit({ "arrow-kind": "instance" }, g), ["mor-ex", "obj-k"]);
 });
 
 test("taxon, id and text", () => {
@@ -207,7 +276,7 @@ test("an expression nobody can read is refused, not half-applied", () => {
   assert.equal(r.fatal, true);
   assert.deepEqual(Object.keys(r.ids), []);
   assert.deepEqual(r.problems.map((p) => p.code), ["unknown-predicate"]);
-  assert.match(problemText(r.problems[0]), /nepoznat predikat/);
+  assert.match(problemText(r.problems[0]), /unknown predicate/);
   // A good predicate beside a bad one does not rescue the expression: the
   // page leaves the view alone rather than showing a half-truth.
   const mixed = evaluate({ and: [{ level: "kind" }, { frobnicate: "x" }] }, G);
@@ -245,13 +314,13 @@ test("nesting has a floor, so a cyclic or absurd expression cannot hang the page
   assert.deepEqual(r.problems.map((p) => p.code).slice(-1), ["too-deep"]);
 });
 
-test("parseExpr reads the text box and the URL hash, and complains in Croatian", () => {
+test("parseExpr reads the text box and the URL hash, and complains in English", () => {
   assert.deepEqual(parseExpr('{"level":"kind"}').expr, { level: "kind" });
   assert.deepEqual(parseExpr("  ").problems.map((p) => p.code), ["empty"]);
   const bad = parseExpr("{level: kind}");
   assert.equal(bad.expr, null);
   assert.equal(bad.problems[0].code, "bad-json");
-  assert.match(problemText(bad.problems[0]), /neispravan JSON/);
+  assert.match(problemText(bad.problems[0]), /invalid JSON/);
 });
 
 test("a 0.1 vault has no structure half, and nothing breaks", () => {
@@ -272,7 +341,7 @@ test("a 0.1 vault has no structure half, and nothing breaks", () => {
   // The predicates that do not need a structure layer still work.
   assert.deepEqual(hit({ taxon: "proof" }, flat), ["prf-a"]);
   assert.deepEqual(hit({ text: "proof of" }, flat), ["prf-a"]);
-  assert.deepEqual(chipsFor(flat).map((c) => c.group), ["taksoni", "taksoni"]);
+  assert.deepEqual(chipsFor(flat).map((c) => c.group), ["taxa", "taxa"]);
 });
 
 test("a 0.2 vault's typed object answers as the instance it became in 0.3", () => {
@@ -295,20 +364,20 @@ test("a 0.2 vault's typed object answers as the instance it became in 0.3", () =
   assert.deepEqual(hit({ "kind-of": "obj-k" }, g), ["obj-k2"]);
   // `pt` is no tree, so an instance arrow's missing end swallows nothing.
   assert.deepEqual(hit({ "tied-to": "mor-ex" }, g), ["mor-ex", "obj-k"]);
-  assert.deepEqual(hit({ "arrow-kind": "instance" }, g), ["mor-ex"]);
+  assert.deepEqual(hit({ "arrow-kind": "instance" }, g), ["mor-ex", "obj-k"]);
 });
 
 test("the chips are built from the vault's own data", () => {
-  const chips = chipsFor(G, { kinds: { hom: "morfizam", data: "podaci" }, taxa: { theorem: "teorem" } });
+  const chips = chipsFor(G, { kinds: { hom: "morphism", data: "data" }, taxa: { theorem: "theorem" } });
   const byId = {};
   chips.forEach((c) => { byId[c.id] = c; });
   assert.deepEqual(byId["level-kind"].expr, { level: "kind" });
-  assert.equal(byId["level-kind"].label, "strukture i odnosi među njima");
-  assert.equal(byId["level-instance"].label, "primjeri i preslikavanja među njima");
+  assert.equal(byId["level-kind"].label, "structures and the relations between them");
+  assert.equal(byId["level-instance"].label, "instances and the maps between them");
   assert.deepEqual(byId["only-hom"].expr, { "arrow-kind": "hom" });
   assert.equal(byId["region-valuations"].label, "Valuations and their instances");
-  assert.equal(byId["kind-hom"].label, "morfizam");
-  assert.equal(byId["taxon-theorem"].label, "teorem");
+  assert.equal(byId["kind-hom"].label, "morphism");
+  assert.equal(byId["taxon-theorem"].label, "theorem");
   // No chip for an arrow kind the vault does not use.
   assert.equal(byId["kind-construction"], undefined);
   // Every chip is a filter that parses and evaluates.
@@ -325,14 +394,14 @@ test("describe() hands an outside caller the grammar and this vault's vocabulary
   assert.deepEqual(val, { id: "obj-valuation", title: "A valuation", level: "kind", of: null, region: "valuations" });
 });
 
-test("describeExpr says the filter back in Croatian, with titles not ids", () => {
-  assert.equal(describeExpr({ level: "kind" }, G), "vrste struktura i odnosi među njima");
-  assert.equal(describeExpr({ "kind-of": "obj-field" }, G), "primjeri vrste A field");
-  assert.equal(describeExpr({ region: "valuations" }, G), "područje Valuations and their instances");
-  assert.equal(describeExpr({ about: "thm-chevalley" }, G), "oko Chevalley's theorem (preko about)");
-  assert.equal(describeExpr({ not: { "arrow-kind": "hom" } }, G), "ne strelice vrste hom");
+test("describeExpr says the filter back in English, with titles not ids", () => {
+  assert.equal(describeExpr({ level: "kind" }, G), "kinds of structure and the relations between them");
+  assert.equal(describeExpr({ "kind-of": "obj-field" }, G), "instances of the kind A field");
+  assert.equal(describeExpr({ region: "valuations" }, G), "region Valuations and their instances");
+  assert.equal(describeExpr({ about: "thm-chevalley" }, G), "around Chevalley's theorem (via about)");
+  assert.equal(describeExpr({ not: { "arrow-kind": "hom" } }, G), "not arrows of kind hom");
   assert.equal(
     describeExpr({ or: [{ level: "kind" }, { and: [{ taxon: "theorem" }, { text: "x" }] }] }, G),
-    "vrste struktura i odnosi među njima ili takson theorem i tekst „x”"
+    'kinds of structure and the relations between them or taxon theorem and text "x"'
   );
 });
