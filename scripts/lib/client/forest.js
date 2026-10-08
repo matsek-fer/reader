@@ -21,6 +21,17 @@
   // down is hoisted but still undefined — which turned every plane-area
   // coordinate into NaN on a reload straight into plane mode.
   var AREA_PAD = 46, AREA_TITLE = 48;
+  // The same trap, reached a second way: that first paint runs the filter,
+  // which draws the on-demand type layer, which reads the structure index, the
+  // built edges, what is highlighted and whether a definition is in focus —
+  // all of it set up in the Structure section far below. So the state it reads
+  // is declared here with the rest of the state, and `structureReady` is the
+  // honest answer to "is there anything to draw yet". See "the two levels".
+  var defFocus = { on: false, id: null, view: null };
+  var hover = { box: null, edge: null, type: null };
+  var typeSel = null;
+  var edgeByArrow = {};
+  var structureReady = false;
   var canvas = document.getElementById('canvas');
   var topbar = document.getElementById('topbar');
   var PANE = {
@@ -267,6 +278,7 @@
     // An object is a node on both tabs, so every card with the id is marked.
     document.querySelectorAll('.node.sel').forEach(function (n) { n.classList.remove('sel'); });
     selected = id;
+    typeSel = null;
     document.querySelectorAll('.node[data-id="' + id + '"]').forEach(function (n) { n.classList.add('sel'); });
     // Picking in one graph lights the other: the trees a box is named by, the
     // boxes and arrows a tree is about. The filter's own match is untouched.
@@ -300,14 +312,75 @@
     panel.classList.remove('open');
     document.querySelectorAll('.node.sel').forEach(function (n) { n.classList.remove('sel'); });
     selected = null;
+    typeSel = null;
     if (lset) { lset = null; paintFilter(); updateFbar(); }
+    else if (S && S.twoLevel) drawOverlay();
     if (was) navRecord();
+  }
+
+  // A type edge opens the panel under a synthetic id, "type:<kindA>|<kindB>",
+  // so the trail, the address, Escape and the close button need no special
+  // case for it. It is not a tree: it gets no reading mark and no ask box,
+  // because there is nothing here to master and nothing to ask that is not one
+  // of the arrows it lists.
+  function openTypePanel(key, opts) {
+    if (!S || !S.twoLevel || !key) return;
+    var ends = typeEnds(key);
+    if (!objById[ends[0]] || !objById[ends[1]]) return;
+    var id = 'type:' + key;
+    if (opts && opts.toggle && selected === id && panel.classList.contains('open')) {
+      closePanel();
+      return;
+    }
+    document.querySelectorAll('.node.sel').forEach(function (n) { n.classList.remove('sel'); });
+    selected = id;
+    typeSel = key;
+    setLink(id);
+    panelBody.innerHTML = typePanelHtml(key);
+    if (markBox.parentNode) markBox.parentNode.removeChild(markBox);
+    updateStrip(id);
+    panel.classList.add('open');
+    panel.scrollTop = 0;
+    drawOverlay();
+    navRecord();
+  }
+  // The one door the address, the trail and a link all come through.
+  function openAny(id, opts) {
+    if (!id) return;
+    if (id.indexOf('type:') === 0) openTypePanel(id.slice(5), opts);
+    else if (F.nodes[id]) openPanel(id, opts);
   }
 
   function escText(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+
+  // A reference to a tree, built by the page rather than by the renderer: the
+  // structure panel's rows and the type edge's page point at trees no wikilink
+  // ever wrote. It is the SAME affordance as a wikilink's — underline, a
+  // marker saying what waits on the other side, the taxon in the tooltip —
+  // and the glyph table and the dead wording come from the renderer itself in
+  // `window.FOREST_REF`, so the two builders cannot drift. A reference whose
+  // target this vault does not hold is a dead one here too, not plain prose.
+  var REF = window.FOREST_REF || { glyph: {}, dead: '%s' };
+  function treeRef(id, label) {
+    var t = F.nodes[id];
+    var inner = escText(label || (t && t.title) || id);
+    if (!t) {
+      return '<span class="treelink tl-dead" title="' +
+        escText(REF.dead.replace('%s', function () { return id; })) + '">' +
+        '<span class="tl-mark" aria-hidden="true">⊘</span>' + inner + '</span>';
+    }
+    var word = (F.taxa && F.taxa[t.taxon]) || t.taxon;
+    return '<a href="#" class="treelink' + (t.taxon ? ' tl-' + escText(t.taxon) : '') +
+      '" data-open="' + escText(id) + '"' +
+      (t.taxon ? ' data-taxon="' + escText(t.taxon) + '"' : '') +
+      ' title="' + escText(word ? word + ' · ' + id : id) + '">' +
+      '<span class="tl-mark" aria-hidden="true">' + (REF.glyph[t.taxon] || '◦') +
+      '</span>' + inner + '</a>';
+  }
+
   function stateLabel(st) {
     return st === 'done' ? 'mastered'
       : st === 'ready' ? 'ready to read' : 'not ready';
@@ -419,7 +492,7 @@
       return;
     }
     var a = ev.target.closest('a[data-open]');
-    if (a) { ev.preventDefault(); openPanel(a.getAttribute('data-open')); }
+    if (a) { ev.preventDefault(); openAny(a.getAttribute('data-open')); }
   });
 
   document.getElementById('tglPrf').addEventListener('change', function (ev) {
@@ -509,7 +582,7 @@
       applyView();
     }, { passive: false });
     p.box.addEventListener('mousedown', function (ev) {
-      if (ev.target.closest('.node, .grp-header, .inst, .sedge, .slabel, .sbox')) return;
+      if (ev.target.closest('.node, .grp-header, .inst, .sedge, .slabel, .sbox, .stag, .stype, .stype-lbl')) return;
       var v = paneView(p);
       pan = { v: v, box: p.box, x: ev.clientX - v.x, y: ev.clientY - v.y };
       p.box.classList.add('panning');
@@ -1000,6 +1073,8 @@
   function r1(v) { return Math.round(v * 10) / 10; }
   function drawStructure() {
     sedges = buildEdges();
+    edgeByArrow = {};
+    sedges.forEach(function (e) { e.ids.forEach(function (x) { edgeByArrow[x] = e; }); });
     sTop = 0;
     var eh = '', lh = '';
     sedges.forEach(function (e, i) {
@@ -1022,64 +1097,253 @@
       var p = S.pos[o.id];
       var dy = o.level === 'instance' ? 20 : 24;
       lh += '<span class="ssym" data-id="' + escText(o.id) + '" style="left:' + (p.x + 10) + 'px;top:' + (p.y + dy) + 'px">' + o.symbol_html + '</span>';
+      if (S.twoLevel && o.level === 'instance' && objById[o.of]) {
+        // The tag hangs just under the box, outside it: inside, it would have
+        // to share a 42px card with the title and the author's symbol, and the
+        // kind names it carries run to 46 characters. The gap below an instance
+        // box is 28px at its tightest in Monsky, 48 in mini, so a 13px line
+        // sitting 2px down clears whatever stands below it.
+        var name = objTitle(o.of);
+        lh += '<span class="stag" data-inst="' + escText(o.id) + '" data-of="' + escText(o.of) +
+          '" title="an instance of: ' + escText(name) + '" style="left:' + r1(p.x) + 'px;top:' + r1(p.y + o.h + 2) + 'px">' +
+          '<span class="stag-in">∈</span>' + escText(name) + '</span>';
+      }
     });
     document.getElementById('sedges').innerHTML = eh;
     slabels.innerHTML = lh;
-    if (S.twoLevel) { drawTies(); drawRegions(); }
+    slabels.appendChild(overlayBox);
+    if (S.twoLevel) drawRegions();
     fitSymbols();
-    // Edges, labels and ties were just replaced wholesale, so whatever the
-    // filter and the selection had lit has to be lit again.
+    // Edges, labels and tags were just replaced wholesale, so whatever the
+    // filter and the selection had lit has to be lit again — and paintFilter
+    // ends by redrawing the on-demand layer, which the new geometry needs.
     paintFilter();
   }
 
-  // An instance's tie to its kind: no head and no label, only the thin line
-  // that says which structure this box is one of. A tie that would run across
-  // half the canvas says it in words instead — a stub out of the instance
-  // carrying the kind's name — because a thin dashed line that long is read as
-  // crossing everything between, or at low zoom not read at all, and either way
-  // the one thing the reader wants from it is the name at this end.
-  var TIE_FAR = 420, TIE_STUB = 54;
-  function drawTies() {
-    var h = '';
-    S.objects.forEach(function (o) {
-      if (o.level !== 'instance' || !S.pos[o.of]) return;
-      var A = boxOf(o.id), B = boxOf(o.of);
-      var ca = [A.x + A.w / 2, A.y + A.h / 2], cb = [B.x + B.w / 2, B.y + B.h / 2];
-      var p = exitPoint(A, ca, cb), q = exitPoint(B, cb, ca);
-      var far = Math.hypot(q[0] - p[0], q[1] - p[1]) > TIE_FAR;
-      if (far) {
-        var u = unit(q[0] - p[0], q[1] - p[1]);
-        q = [p[0] + u[0] * TIE_STUB, p[1] + u[1] * TIE_STUB];
-      }
-      h += '<line class="stie' + (far ? ' far' : '') + '" data-inst="' + escText(o.id) + '" data-of="' + escText(o.of) + '" x1="' + r1(p[0]) + '" y1="' + r1(p[1]) +
-        '" x2="' + r1(q[0]) + '" y2="' + r1(q[1]) + '"/>';
-      if (far) {
-        var name = objTitle(o.of);
-        if (name.length > 26) name = name.slice(0, 25) + '…';
-        var tw = name.length * 5.8, th = 11, end = u[0] < 0 ? -1 : 1;
-        // The name goes at the far end of the stub, or nearer, or above or
-        // below it — wherever it does not land on somebody else's box.
-        var spots = [];
-        // Nearest the instance first: the name says what THIS box is an
-        // instance of, so adrift at the stub's far end it reads as stray text.
-        [0.1, 0.4, 0.7, 1].forEach(function (t) {
-          var m = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
-          [3, -11, 17, -22, 28].forEach(function (dy) { spots.push([m[0] + end * 4, m[1] + dy]); });
-        });
-        var at = spots[0];
-        for (var si = 0; si < spots.length; si++) {
-          var r = { x: end > 0 ? spots[si][0] : spots[si][0] - tw, y: spots[si][1] - th, w: tw, h: th + 3 };
-          var clear = S.objects.every(function (z) {
-            var b = boxOf(z.id);
-            return r.x > b.x + b.w || b.x > r.x + r.w || r.y > b.y + b.h || b.y > r.y + r.h;
-          });
-          if (clear) { at = spots[si]; break; }
-        }
-        h += '<text class="stie-name" data-inst="' + escText(o.id) + '" data-of="' + escText(o.of) + '" x="' + r1(at[0]) +
-          '" y="' + r1(at[1]) + '" text-anchor="' + (end < 0 ? 'end' : 'start') + '">' + escText(name) + '</text>';
-      }
+  // --- the two levels: a tag at rest, a line one hover away ----------------
+  //
+  // An instance used to be joined to its kind by a drawn tie, one per instance.
+  // Fifteen kinds and thirty-eight instances made every kind a hub of
+  // converging dashed lines — and the lines said only "these boxes share a
+  // type", which is the one thing a word can say better. The owner's verdict:
+  // "definitely use a tag instead of a line. Only when user highlight an
+  // instance it would be good to then highlight the line to its type object."
+  //
+  // So the kind's name is a tag on the box (drawn with the labels, above), and
+  // NOTHING of the type level is on the canvas at rest. Highlight an instance
+  // and the line to its kind appears. Highlight an arrow between two instances
+  // and the TYPE-LEVEL EDGE behind it appears between their two kinds, with
+  // both ties, so the whole path — this box, its kind, the shape of the
+  // relationship, the other kind, that box — reads in one glance. Let go and
+  // the canvas is quiet again.
+  //
+  // `hover` is what the pointer is on, `selected` what the panel holds, and
+  // `typeSel` a type edge whose own panel is open; the overlay is the union, so
+  // a reader can pin a relationship by clicking it and then let the mouse go.
+  // Those three and `edgeByArrow` are declared with the state at the top.
+  //
+  // The label overlay is rebuilt wholesale by drawStructure, so the type
+  // edge's own chip lives in a box of its own that is re-appended after.
+  var overlayBox = document.createElement('div');
+  overlayBox.id = 'stypelabels';
+
+  function kindOfObj(id) {
+    var o = objById[id];
+    return o && o.level === 'instance' && objById[o.of] ? o.of : null;
+  }
+  // The type edge behind an arrow: the kinds of its two ends. An arrow whose
+  // ends are already kinds has nothing above it — it IS the type level — so it
+  // raises no edge, and an arrow that lost an end to a layout has none either.
+  function typeKeyOf(e) {
+    if (!e) return null;
+    var a = kindOfObj(e.from), b = kindOfObj(e.to);
+    return a && b && S.pos[a] && S.pos[b] ? a + '|' + b : null;
+  }
+  function typeEnds(key) {
+    var i = key.indexOf('|');
+    return [key.slice(0, i), key.slice(i + 1)];
+  }
+  // Every instance-level arrow that projects onto one type edge. Several
+  // sharing an edge is information, not noise: three of Monsky's homs are maps
+  // between two fields, and that the vault needs three of them is the point.
+  function arrowsOfType(key) {
+    var ends = typeEnds(key);
+    return S.arrows.filter(function (a) {
+      return kindOfObj(a.from) === ends[0] && kindOfObj(a.to) === ends[1];
     });
-    document.getElementById('sties').innerHTML = h;
+  }
+  // Constructions the vault draws between the same two kinds. Not the same
+  // arrows — these live a level up — but a reader who sees "a map from a ring
+  // to a field" will ask whether the vault's fraction field is that map, and
+  // the answer belongs on the page rather than in their head.
+  function kindArrowsOfType(key) {
+    var ends = typeEnds(key);
+    return S.arrows.filter(function (a) {
+      return a.from === ends[0] && a.to === ends[1] && !kindOfObj(a.from);
+    });
+  }
+
+  function tieGeom(id) {
+    var o = objById[id], A = boxOf(id), B = boxOf(o.of);
+    var ca = [A.x + A.w / 2, A.y + A.h / 2], cb = [B.x + B.w / 2, B.y + B.h / 2];
+    return [exitPoint(A, ca, cb), exitPoint(B, cb, ca)];
+  }
+  // A type edge between two different kinds is a straight run border to
+  // border. Between one kind and itself — "a map between two structures of
+  // this sort", which is what most of them are — it is an arc on the BOTTOM
+  // side, because the top side is where a real loop is drawn and the two
+  // levels must never be mistaken for each other.
+  var TYPE_LOOP_H = 34;
+  function typeGeom(key) {
+    var ends = typeEnds(key), A = boxOf(ends[0]);
+    if (ends[0] === ends[1]) {
+      var x1 = A.x + A.w * 0.32, x2 = A.x + A.w * 0.68, y = A.y + A.h;
+      var c = y + TYPE_LOOP_H * 4 / 3;
+      return {
+        d: 'M' + r1(x1) + ',' + r1(y) + ' C' + r1(x1 - 18) + ',' + r1(c) + ' ' + r1(x2 + 18) + ',' + r1(c) + ' ' + r1(x2) + ',' + r1(y),
+        mid: [(x1 + x2) / 2, y + TYPE_LOOP_H],
+        // The arc runs flat under the box, so its chip slides sideways along
+        // it and, away from the box, downwards.
+        dir: [1, 0], norm: [0, 1],
+      };
+    }
+    var B = boxOf(ends[1]);
+    var ca = [A.x + A.w / 2, A.y + A.h / 2], cb = [B.x + B.w / 2, B.y + B.h / 2];
+    var p = exitPoint(A, ca, cb), q = exitPoint(B, cb, ca);
+    var u = unit(q[0] - p[0], q[1] - p[1]);
+    return {
+      d: 'M' + r1(p[0]) + ',' + r1(p[1]) + ' L' + r1(q[0]) + ',' + r1(q[1]),
+      mid: [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2],
+      dir: u, norm: [-u[1], u[0]],
+    };
+  }
+
+  // What the overlay should be showing, from the three sources at once.
+  function overlayWanted() {
+    var ties = {}, types = {};
+    if (defFocus.on) return { ties: ties, types: types };
+    var tie = function (id) { if (kindOfObj(id)) ties[id] = true; };
+    var edge = function (arrowId) {
+      var k = typeKeyOf(edgeByArrow[arrowId]);
+      if (!k) return;
+      types[k] = true;
+      tie(arrowById[arrowId] ? arrowById[arrowId].from : null);
+      tie(arrowById[arrowId] ? arrowById[arrowId].to : null);
+    };
+    tie(hover.box);
+    tie(selected);
+    if (hover.edge) edge(hover.edge);
+    if (selected && arrowById[selected]) edge(selected);
+    // Hovering the raised edge or its chip must not make it vanish under the
+    // cursor, and a pinned one stays until the panel it opened is closed.
+    if (hover.type) types[hover.type] = true;
+    if (typeSel) types[typeSel] = true;
+    return { ties: ties, types: types };
+  }
+  // Dimming for the on-demand layer is decided here rather than in
+  // paintFilter: these elements do not exist until the moment they are drawn,
+  // so there is nothing for a later paint to find.
+  // '' for an element the filter leaves standing, ' fdim' for one it leaves
+  // out, and null for one `hide` takes away — which here means not emitting
+  // it, since nothing exists to hide until the moment it is drawn.
+  function fPair(a, b) {
+    if (!fset || (fLit(a) && fLit(b))) return '';
+    return fHide ? null : ' fdim';
+  }
+  function drawOverlay() {
+    if (!structureReady || !S.twoLevel) return;
+    var want = overlayWanted();
+    var th = '', lh = '';
+    Object.keys(want.ties).sort().forEach(function (id) {
+      var of = objById[id].of, cls = fPair(id, of);
+      if (cls === null) return;
+      var g = tieGeom(id);
+      th += '<line class="stie' + cls + '" data-inst="' + escText(id) + '" data-of="' + escText(of) +
+        '" x1="' + r1(g[0][0]) + '" y1="' + r1(g[0][1]) + '" x2="' + r1(g[1][0]) + '" y2="' + r1(g[1][1]) + '"/>';
+    });
+    var yh = '', geo = {};
+    Object.keys(want.types).sort().forEach(function (key) {
+      var ends = typeEnds(key), cls = fPair(ends[0], ends[1]);
+      if (cls === null) return;
+      var g = typeGeom(key), n = arrowsOfType(key).length;
+      geo[key] = g;
+      yh += '<g class="stype' + cls + (typeSel === key ? ' stype-on' : '') + '" data-type="' + escText(key) + '">' +
+        '<path class="hit" d="' + g.d + '"/>' +
+        '<path class="line" d="' + g.d + '" marker-end="url(#ah-type)"/></g>';
+      lh += '<span class="stype-lbl' + cls + (typeSel === key ? ' stype-on' : '') + '" data-type="' + escText(key) +
+        '" title="' + escText(objTitle(ends[0]) + ' → ' + objTitle(ends[1]) + ' — click for both types’ context') +
+        '" style="left:' + r1(g.mid[0]) + 'px;top:' + r1(g.mid[1]) + 'px">type level · ' +
+        n + (n === 1 ? ' arrow' : ' arrows') + ' ▸</span>';
+    });
+    document.getElementById('sties').innerHTML = th;
+    document.getElementById('stypes').innerHTML = yh;
+    overlayBox.innerHTML = lh;
+    placeTypeChips(geo);
+    // Both kinds of a raised edge, and the kind a raised tie points at, are
+    // lit on the canvas: the instance "contributes its type" to the level
+    // above, which is only legible if the box up there answers.
+    var litKinds = {};
+    Object.keys(want.ties).forEach(function (id) { litKinds[objById[id].of] = true; });
+    Object.keys(want.types).forEach(function (k) { typeEnds(k).forEach(function (e) { litKinds[e] = true; }); });
+    document.querySelectorAll('#slayer .sbox').forEach(function (b) {
+      b.classList.toggle('tlit', !!litKinds[b.getAttribute('data-box')]);
+    });
+  }
+
+  // An edge's midpoint is where its chip belongs and also, routinely, where a
+  // box is: two kinds a region apart have a straight run between them that
+  // passes over everything in the way, and the chip's background is opaque, so
+  // three of Monsky's raised chips covered a box — twice one of the two the
+  // edge itself runs between, which is exactly what the reader is being told
+  // about. So the chip gets the same escape placeLabels gives an arrow's own
+  // label: the midpoint first, then along its own line, then out to the side,
+  // nearest spot that costs nothing, else the cheapest.
+  //
+  // BOTH directions are needed, not just the perpendicular. A vertical edge's
+  // perpendicular is horizontal, and sliding a 121px chip sideways along a row
+  // of 176px boxes never leaves one — the mini vault's group→set chip was
+  // still on `obj-nat` after 80px of it. Along the line is also the better
+  // first move: the chip stays on the edge it names.
+  //
+  // Chips keep off each other too, because a pinned edge and a hovered one are
+  // up at once. Never more than a handful, so the sweep is cheap enough to
+  // redo on every hover.
+  var CHIP_STEPS = [0, 1, -1, 2, -2, 3, -3];
+  function chipSpots(g, w, h) {
+    var along = w / 2 + 10, out = h + 6, spots = [];
+    CHIP_STEPS.forEach(function (t) {
+      CHIP_STEPS.forEach(function (o) {
+        spots.push({
+          d: Math.abs(t) + 1.2 * Math.abs(o),
+          m: [g.mid[0] + g.dir[0] * t * along + g.norm[0] * o * out,
+              g.mid[1] + g.dir[1] * t * along + g.norm[1] * o * out],
+        });
+      });
+    });
+    spots.sort(function (a, b) { return a.d - b.d; });
+    return spots;
+  }
+  function placeTypeChips(geo) {
+    var boxes = S.objects.map(function (o) { return boxOf(o.id); });
+    var placed = [];
+    overlayBox.querySelectorAll('.stype-lbl').forEach(function (sp) {
+      var g = geo[sp.getAttribute('data-type')];
+      if (!g) return;
+      var w = sp.offsetWidth, h = sp.offsetHeight;
+      if (!w) return;
+      var spots = chipSpots(g, w, h), best = null;
+      for (var i = 0; i < spots.length; i++) {
+        var m = spots[i].m;
+        var r = { x: m[0] - w / 2, y: m[1] - h / 2, w: w, h: h }, cost = 0;
+        boxes.forEach(function (b) { cost += overlap(r, b); });
+        placed.forEach(function (b) { cost += overlap(r, b); });
+        if (!best || cost < best.cost) best = { cost: cost, m: m, r: r };
+        if (!best.cost) break;
+      }
+      sp.style.left = r1(best.m[0]) + 'px';
+      sp.style.top = r1(best.m[1]) + 'px';
+      placed.push(best.r);
+    });
   }
 
   // A region's frame is its boxes' bounding box plus the margin and the title
@@ -1210,6 +1474,30 @@
       if (e.loop) sTop = Math.min(sTop, best.r.y - 6);
       placed.push(best.r);
     });
+    placeTags();
+  }
+
+  // A kind tag hangs under its box and is usually wider than it — kind names
+  // run to 46 characters against a 148px box. One pair in Monsky stands close
+  // enough that the tag under the left box reached 13px into the right one, so
+  // a tag gives up the characters it has no room for and keeps the whole name
+  // in its tooltip. Nothing is moved: a tag that drifted off its own box would
+  // stop saying which box it is about, which is its only job.
+  function placeTags() {
+    if (!S || !S.twoLevel) return;
+    var all = S.objects.map(function (o) { var b = boxOf(o.id); b.id = o.id; return b; });
+    slabels.querySelectorAll('.stag').forEach(function (t) {
+      t.style.maxWidth = '';
+      var id = t.getAttribute('data-inst'), b = boxOf(id);
+      var h = t.offsetHeight, w = t.offsetWidth;
+      if (!w) return;
+      var y = b.y + b.h + 2, room = Infinity;
+      all.forEach(function (q) {
+        if (q.id === id || y > q.y + q.h || q.y > y + h || q.x + q.w <= b.x) return;
+        room = Math.min(room, q.x - 6 - b.x);
+      });
+      if (w > room) t.style.maxWidth = Math.max(70, Math.floor(room)) + 'px';
+    });
   }
 
   // --- editing the layout --------------------------------------------------
@@ -1331,8 +1619,8 @@
 
   // --- one level lower: a kind's defining diagram on the canvas ------------
   // The panel already typesets the diagram; this shows it in place, with the
-  // rest of the canvas out of the way and one way back.
-  var defFocus = { on: false, id: null, view: null };
+  // rest of the canvas out of the way and one way back. `defFocus` itself is
+  // declared with the rest of the state at the top of the file.
   function focusDefinition(id) {
     var o = objById[id];
     if (!o || !o.data || !o.data.length) return;
@@ -1360,7 +1648,13 @@
     slabels.querySelectorAll('.ssym').forEach(function (s) {
       s.classList.toggle('off', !keep[s.getAttribute('data-id')]);
     });
-    document.getElementById('sties').classList.add('off');
+    slabels.querySelectorAll('.stag').forEach(function (t) {
+      t.classList.toggle('off', !keep[t.getAttribute('data-inst')]);
+    });
+    // A focused diagram is one way of looking at one definition; the type
+    // level is another, and showing both at once says neither. drawOverlay
+    // reads defFocus and empties itself.
+    drawOverlay();
     document.getElementById('sregions').classList.add('off');
     var bar = document.getElementById('focusbar');
     bar.hidden = false;
@@ -1389,6 +1683,7 @@
     document.body.classList.remove('sfocus');
     document.querySelectorAll('#slayer .off, #slabels .off').forEach(function (el) { el.classList.remove('off'); });
     document.getElementById('focusbar').hidden = true;
+    drawOverlay();
     // "Back to the whole graph" means the graph as it was, so the bar's own way
     // out restores the pan and zoom it took away. Leaving BY clicking something
     // faded does not: the box the reader just aimed at has to stay under the
@@ -1468,7 +1763,7 @@
     if (!keys.length) return '';
     return '<dl class="sdl">' + keys.map(function (k) {
       var a = arrowById[k];
-      return '<dt><span class="sh-lbl">' + (a ? a.label_html : '') + '</span><a href="#" data-open="' + escText(k) + '">' + escText(a ? a.title : k) + '</a></dt>' +
+      return '<dt><span class="sh-lbl">' + (a ? a.label_html : '') + '</span>' + treeRef(k, a ? a.title : null) + '</dt>' +
         '<dd>' + inst.values_html[k] + '</dd>';
     }).join('') + '</dl>';
   }
@@ -1549,6 +1844,19 @@
     }
     var a = arrowById[id];
     if (!a) return '';
+    // The type edge behind this arrow, in words. The canvas raises it on
+    // hover, but a kind can sit a region away from its instances, so at a
+    // readable zoom the raised edge is often off screen; this row is the way
+    // to it that no layout can take away.
+    var tk = S.twoLevel && typeKeyOf(edgeByArrow[id]);
+    if (tk) {
+      var te = typeEnds(tk), tn = arrowsOfType(tk).length;
+      h += '<h3 class="ssec">One level up</h3>' +
+        '<a href="#" class="srow" data-open="' + escText('type:' + tk) + '">' +
+        escText(objTitle(te[0])) + (te[0] === te[1] ? ' \u21bb' : ' \u2192 ' + escText(objTitle(te[1]))) +
+        '<span class="srow-via">the type edge behind this arrow \u2014 ' + tn +
+        (tn === 1 ? ' arrow of this shape' : ' arrows of this shape') + '</span></a>';
+    }
     if (a.kind !== 'instance') {
       var ex = (S.instances[a.from] || []).filter(function (i) { return i.values_html[id]; });
       if (ex.length) {
@@ -1563,10 +1871,125 @@
     return h;
   }
 
+  // --- the type edge's page ------------------------------------------------
+  //
+  // NO TREE AUTHORS THIS PAGE. A type edge is not a thing in the vault: it is
+  // what the concrete arrows between instances have in common once their ends
+  // are read one level up. The owner asked for "the overview of the both
+  // context (what is additional contents assumed about the types that make the
+  // relationship possible) and what the relationship is", and every piece of
+  // that is already written somewhere in the vault:
+  //
+  //   what the two types are      each kind's title, symbol and `hom`
+  //   what is assumed beyond them each projecting arrow's `needs` (and
+  //                               `assumes`) — the format's own words for
+  //                               "extra data that is NOT part of the source"
+  //   what the relationship is    each projecting arrow's statement, and for
+  //                               a construction its on_homomorphisms and
+  //                               whether it is functorial
+  //   how each type is built      the kind's defining diagram, lifted out of
+  //                               its own panel rather than stored twice
+  //
+  // The page says so at the bottom, in one line, because a page that reads
+  // like authored prose and is not would be worse than no page.
+  function needsList(a) {
+    if (!a.needs_html) return '';
+    if (!a.needs_html.length) {
+      return '<div class="te-needs te-none">nothing beyond the two types</div>';
+    }
+    return '<ul class="te-needs">' + a.needs_html.map(function (n) { return '<li>' + n + '</li>'; }).join('') + '</ul>';
+  }
+  // A kind's defining diagram is already typeset in its own panel; lifting the
+  // figure out of there keeps one copy of it in the page.
+  function defFigureOf(id) {
+    var tpl = document.createElement('template');
+    tpl.innerHTML = window.TREES[id] || '';
+    var fig = tpl.content.querySelector('figure.cd');
+    return fig ? fig.outerHTML : '';
+  }
+  function typeSide(kid) {
+    var o = objById[kid];
+    if (!o) return '';
+    var h = '<div class="te-side"><div class="te-side-head">' + treeRef(kid, objTitle(kid)) +
+      '<span class="level-chip lvl-kind">kind</span></div>';
+    if (o.symbol_html) h += '<div class="te-sym">' + o.symbol_html + '</div>';
+    if (o.hom_html) h += '<div class="te-row"><span class="te-k">A map of these is</span><span class="te-v">' + o.hom_html + '</span></div>';
+    if (o.data && o.data.length) {
+      h += '<div class="te-row"><span class="te-k">Defined by</span><span class="te-v">' +
+        o.data.map(function (x) { return treeRef(x); }).join(', ') + '</span></div>';
+      var fig = defFigureOf(kid);
+      if (fig) h += '<div class="te-def">' + fig + '</div>';
+    } else {
+      h += '<div class="te-row"><span class="te-k">Defined by</span><span class="te-v te-none">no diagram — the vault takes this kind as primitive</span></div>';
+    }
+    var examples = (S.objects || []).filter(function (x) { return x.of === kid; });
+    h += '<div class="te-row"><span class="te-k">Instances here</span><span class="te-v">' +
+      (examples.length ? examples.map(function (x) { return treeRef(x.id, x.title); }).join(', ')
+        : '<span class="te-none">none in this vault</span>') + '</span></div>';
+    return h + '</div>';
+  }
+  function typeArrowRow(a, kindLevel) {
+    var h = '<div class="te-arrow"><div class="te-arrow-head">' +
+      '<span class="srow-lbl" style="color:' + KIND_COLOR[a.kind] + '">' + a.label_html + '</span>' +
+      treeRef(a.id, a.title) + ' <span class="kind-chip" style="--c:' + KIND_COLOR[a.kind] + '">' +
+      escText(KIND_LABEL[a.kind] || a.kind) + '</span></div>';
+    h += '<div class="te-stm">' + a.statement_html + '</div>';
+    if (!kindLevel) {
+      h += '<div class="te-row"><span class="te-k">Between</span><span class="te-v">' +
+        treeRef(a.from) + ' <span class="sep">→</span> ' + treeRef(a.to) + '</span></div>';
+    }
+    h += '<div class="te-row"><span class="te-k">Assumes</span><span class="te-v">' + (needsList(a) ||
+      '<span class="te-none">the vault states no extra data</span>') + '</span></div>';
+    if (a.on_hom_html) {
+      h += '<div class="te-row"><span class="te-k">On maps</span><span class="te-v">' + a.on_hom_html + '</span></div>';
+    }
+    if (typeof a.functorial === 'boolean') {
+      h += '<div class="te-row"><span class="te-k">Functorial</span><span class="te-v">' + (a.functorial ? 'yes' : 'no') + '</span></div>';
+    }
+    if (typeof a.invertible === 'boolean') {
+      h += '<div class="te-row"><span class="te-k">Isomorphism</span><span class="te-v">' + (a.invertible ? 'yes' : 'no') + '</span></div>';
+    }
+    if (a.assumes && a.assumes.length) {
+      h += '<div class="te-row"><span class="te-k">Principles</span><span class="te-v">' +
+        a.assumes.map(function (x) { return '<code>' + escText(x) + '</code>'; }).join(', ') + '</span></div>';
+    }
+    return h + '</div>';
+  }
+  function typePanelHtml(key) {
+    var ends = typeEnds(key), loop = ends[0] === ends[1];
+    var list = arrowsOfType(key), up = kindArrowsOfType(key);
+    var h = '<div class="panel-head"><span class="chip" style="--c:#e9d66b">type level</span>' +
+      '<h2>' + escText(objTitle(ends[0])) + (loop ? ' ↻' : ' → ' + escText(objTitle(ends[1]))) + '</h2>' +
+      '<div class="panel-id">' + escText(ends[0]) + (loop ? '' : ' → ' + escText(ends[1])) + '</div></div>';
+    h += '<div class="struct-head"><div class="sh-row"><span class="sh-k">What this is</span><span class="sh-v">' +
+      (loop
+        ? 'A relationship the vault draws between two structures of one kind — ' + list.length +
+          (list.length === 1 ? ' arrow' : ' arrows') + ' of this shape.'
+        : 'A relationship the vault draws between a structure of the first kind and one of the second — ' +
+          list.length + (list.length === 1 ? ' arrow' : ' arrows') + ' of this shape.') +
+      '</span></div></div>';
+    h += '<h3 class="ssec">The two types</h3>' + typeSide(ends[0]) + (loop ? '' : typeSide(ends[1]));
+    h += '<h3 class="ssec">What the relationship is, arrow by arrow (' + list.length + ')</h3>';
+    h += list.length
+      ? list.map(function (a) { return typeArrowRow(a, false); }).join('')
+      : '<p class="smuted">No arrow of this shape is drawn any more.</p>';
+    if (up.length) {
+      h += '<h3 class="ssec">At the kind level, between the same two kinds (' + up.length + ')</h3>' +
+        '<p class="smuted">Constructions out of the first kind into the second. They are arrows of the level ' +
+        'above the maps listed before — not the same arrows — and they apply to every instance of their source.</p>' +
+        up.map(function (a) { return typeArrowRow(a, true); }).join('');
+    }
+    h += '<p class="te-made">Assembled by this page out of the arrows above — the vault holds no tree for the ' +
+      'type edge itself, so what you see is their <code>needs</code>, their statements and the two kinds’ own ' +
+      'definitions, and nothing beyond them.</p>';
+    return h;
+  }
+
   if (S) {
     S.kinds.forEach(function (k) { KIND_COLOR[k.id] = k.color; KIND_LABEL[k.id] = k.label; });
     S.objects.forEach(function (o) { objById[o.id] = o; });
     S.arrows.forEach(function (a) { arrowById[a.id] = a; });
+    structureReady = true;
     basePos = snapshot();
     planeLayout();
     drawStructure();
@@ -1580,17 +2003,57 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureStructure);
     slayer.addEventListener('click', function (ev) {
       if (dragged) { dragged = false; return; }
+      var y = ev.target.closest('.stype');
+      if (y) { openTypePanel(y.getAttribute('data-type'), { toggle: true }); return; }
       var n = ev.target.closest('.node, .inst, .sedge');
       if (!n) return;
       leaveFocusIfOff(n);
       openPanel(n.getAttribute('data-id'), { toggle: true });
     });
     slabels.addEventListener('click', function (ev) {
+      var y = ev.target.closest('.stype-lbl');
+      if (y) { openTypePanel(y.getAttribute('data-type'), { toggle: true }); return; }
+      // The tag IS the way to the kind: a word that names a box and does not
+      // open it would be the worst of both answers.
+      var t = ev.target.closest('.stag');
+      if (t) { leaveFocusIfOff(t); openPanel(t.getAttribute('data-of'), { toggle: true }); return; }
       var l = ev.target.closest('.slabel');
       if (!l) return;
       leaveFocusIfOff(l);
       openPanel(l.getAttribute('data-open'), { toggle: true });
     });
+    // Highlighting is hovering, and hovering is delegated: the elements that
+    // answer it are rebuilt on every drag and every filter, so nothing here
+    // may hold a reference to one. A box, its tag, an arrow and an arrow's
+    // label all raise the same thing; the raised edge and its own chip count
+    // as hovering themselves, or the picture would vanish under the cursor
+    // that reached for it.
+    if (S.twoLevel) {
+      var sense = function (el) {
+        var box = el && el.closest('.sbox, .stag');
+        var edge = el && el.closest('.sedge, .slabel');
+        var type = el && el.closest('.stype, .stype-lbl');
+        var next = {
+          box: box ? (box.getAttribute('data-box') || box.getAttribute('data-inst')) : null,
+          edge: edge ? (edge.getAttribute('data-id') || edge.getAttribute('data-open')) : null,
+          type: type ? type.getAttribute('data-type') : null,
+        };
+        // Reaching for the raised edge's chip means leaving the arrow that
+        // raised it, and the two ties would go with it — so a type element
+        // under the pointer keeps whatever was under it a moment ago.
+        if (next.type && !next.box && !next.edge) { next.box = hover.box; next.edge = hover.edge; }
+        if (next.box === hover.box && next.edge === hover.edge && next.type === hover.type) return;
+        hover = next;
+        drawOverlay();
+      };
+      [slayer, slabels].forEach(function (host) {
+        host.addEventListener('mouseover', function (ev) { sense(ev.target); });
+        host.addEventListener('mouseout', function (ev) {
+          var to = ev.relatedTarget;
+          sense(to && to.closest ? to : null);
+        });
+      });
+    }
   }
 
   // ---- filters: one expression over both graphs ----------------------------
@@ -1657,6 +2120,10 @@
     slabels.querySelectorAll('.ssym').forEach(function (s) {
       paintEl(s, fStateOf(s.getAttribute('data-id')), hid);
     });
+    // The kind tag belongs to its instance's box and fades with it.
+    slabels.querySelectorAll('.stag').forEach(function (t) {
+      paintEl(t, fStateOf(t.getAttribute('data-inst')), hid);
+    });
     // An edge may stand for an inverse pair, so it is lit if either arrow is.
     // The first paint can land before the edges are built, hence the guard.
     (sedges || []).forEach(function (e, i) {
@@ -1665,12 +2132,6 @@
       else if (fset) st = e.ids.some(function (x) { return fset[x]; }) ? 'match' : 'out';
       paintEl(document.querySelector('#sedges .sedge[data-id="' + e.ids[0] + '"]'), st, hid);
       paintEl(slabels.querySelector('.slabel[data-i="' + i + '"]'), st, hid);
-    });
-    // A tie is a statement about two boxes, so it survives only with both.
-    document.querySelectorAll('#sties [data-inst]').forEach(function (t) {
-      var on = fLit(t.getAttribute('data-inst')) && fLit(t.getAttribute('data-of'));
-      t.classList.toggle('fdim', !on && !hid);
-      t.classList.toggle('fhide', !on && hid);
     });
     // The frames last, and they obey `hide` like everything above them: a frame
     // fades while dimming, because knowing WHERE on the map the lit things sit
@@ -1685,6 +2146,11 @@
       r.classList.toggle('fdim', !any && !hid);
       r.classList.toggle('fhide', !any && hid);
     });
+    // Last: the layer that is drawn on demand. A tie and a type edge are
+    // statements about two boxes, so each survives only with both — and since
+    // neither exists until it is raised, the filter is applied as they are
+    // drawn rather than found afterwards.
+    if (S.twoLevel) drawOverlay();
   }
 
   function countText(c) {
@@ -1930,7 +2396,7 @@
         if (ta2) ta2.value = '';
         clearFilter({ quiet: true });
       }
-      if (p.tree && F.nodes[p.tree]) openPanel(p.tree);
+      if (p.tree && (F.nodes[p.tree] || p.tree.indexOf('type:') === 0)) openAny(p.tree);
       else closePanel();
       if (p.focus && S && objById[p.focus]) { revealStructure(); focusDefinition(p.focus); }
       else unfocus();
@@ -2033,7 +2499,7 @@
       if (st.focus) { if (st.focus !== defFocus.id) { revealStructure(); focusDefinition(st.focus); } }
       else unfocus();
       // Re-rendering the panel it already shows would only make it flicker.
-      if (st.tree) { if (st.tree !== selected || !panel.classList.contains('open')) openPanel(st.tree); }
+      if (st.tree) { if (st.tree !== selected || !panel.classList.contains('open')) openAny(st.tree); }
       else closePanel();
     } finally { navQuiet--; }
     navButtons();
@@ -2102,7 +2568,10 @@
       clear: function () { lset = null; clearFilter(); return { ok: true }; },
       hide: function (on) { setHide(on); return { hide: fHide }; },
       link: function (id) { setLink(id); return { linked: lset ? Object.keys(lset).sort() : [] }; },
-      select: function (id) { if (F.nodes[id]) openPanel(id); return { selected: selected }; },
+      // `openAny`, not `openPanel`: a type edge is addressable as
+      // "type:<kindA>|<kindB>" and the hash already opens one, so the API a
+      // tutor drives the page through must reach it too.
+      select: function (id) { openAny(id); return { selected: selected }; },
       close: function () { closePanel(); return { selected: selected }; },
       back: function () { navGo(-1); return { at: navIdx, depth: navLine.length }; },
       forward: function () { navGo(1); return { at: navIdx, depth: navLine.length }; },
@@ -2124,7 +2593,7 @@
           history: { at: navIdx, depth: navLine.length, states: navLine.map(navHash) },
           arrangement: { mode: mode, split: split, folded: { order: folded.order, structure: folded.structure } },
           chips: fchips.map(function (c) { return { label: c.label, group: c.group, expr: c.expr }; }),
-          hash: 'open the page with #filter=<urlencoded JSON>[&hide=1][&mode=plane][&pane=structure][&tree=<id>][&focus=<obj- id>]',
+          hash: 'open the page with #filter=<urlencoded JSON>[&hide=1][&mode=plane][&pane=structure][&tree=<id>, where <id> is a tree id or "type:<kindA>|<kindB>" for a type edge, urlencoded][&focus=<obj- id>]',
           grammar: FF.vocabulary(fgraph),
         };
       },
@@ -2178,7 +2647,7 @@
     });
     document.getElementById('strip-body').addEventListener('click', function (ev) {
       var a = ev.target.closest('a[data-open]');
-      if (a) { ev.preventDefault(); openPanel(a.getAttribute('data-open')); }
+      if (a) { ev.preventDefault(); openAny(a.getAttribute('data-open')); }
     });
   }
 

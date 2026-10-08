@@ -44,7 +44,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import yaml from "js-yaml";
-import { renderBody as renderBodyShared, renderMath as renderMathShared, renderCd, cdCss } from "./lib/render.mjs";
+import {
+  renderBody as renderBodyShared, renderMath as renderMathShared,
+  renderCd, cdCss, refCss, refHtml, refData,
+} from "./lib/render.mjs";
 import {
   PROVABLE, NODE_W, NODE_H, PRF_W, PRF_H, HEADER_H, PAD, COLLAPSED_W, INST_H, INST_GAP,
   INST_BOX_W, INST_BOX_H, REG_TITLE_H, REG_PAD,
@@ -261,9 +264,13 @@ function loadVault(vaultDir) {
 
 const renderMath = renderMathShared;
 // Delegates to the shared renderer; `trees` here is a Map, the shared
-// function takes a membership predicate.
+// function takes a predicate. It answers with the target's TAXON rather than
+// a bare true, which is what lets a reference say what it points at — the
+// shared renderer takes either answer, so serve-vault's plain membership set
+// still renders every reference, only without the taxon marker.
+const taxonOf = (trees) => (id) => (trees.has(id) ? trees.get(id).fm.taxon || true : false);
 function renderBody(body, trees, lang) {
-  return renderBodyShared(body, (id) => trees.has(id), { lang });
+  return renderBodyShared(body, taxonOf(trees), { lang, taxa: TAXON_LABEL });
 }
 
 // A frontmatter sentence (hom, needs, on_homomorphisms, values) rendered
@@ -374,6 +381,12 @@ function buildStructure(vault, groups) {
     o.level = kind ? "instance" : "kind";
     if (kind) o.of = fm.instance_of;
     else if (Array.isArray(fm.data)) o.data = fm.data.filter((x) => trees.has(x));
+    // A kind's `hom` sentence says what a map between two structures of that
+    // sort IS — which is the whole content of a type edge whose two ends are
+    // one kind, so the page needs it beside the arrows.
+    const homSrc = fm.hom ?? kind?.hom;
+    if (homSrc) o.hom_html = inline(String(homSrc));
+    if (Array.isArray(fm.assumes) && fm.assumes.length) o.assumes = fm.assumes.map(String);
     o.region = typeof fm.region === "string" ? fm.region : "";
     o.w = kind ? INST_BOX_W : NODE_W;
     o.h = kind ? INST_BOX_H : NODE_H;
@@ -396,6 +409,17 @@ function buildStructure(vault, groups) {
     };
     if (fm.inverse && trees.has(fm.inverse)) a.inverse = fm.inverse;
     if (fm.up_to && trees.has(fm.up_to)) a.up_to = fm.up_to;
+    // What an arrow consumes, and what it does to maps. A TYPE EDGE's panel is
+    // assembled out of these, because `needs` is literally "what is assumed
+    // beyond the bare types" — the question a reader asks of a relationship
+    // between two kinds — and the page has no other route to it.
+    if (Array.isArray(fm.needs)) a.needs_html = fm.needs.map((n) => inline(String(n)));
+    if (fm.acts_on === "all") a.acts_on = "all";
+    else if (Array.isArray(fm.acts_on)) a.acts_on = fm.acts_on.filter((x) => trees.has(x));
+    if (fm.on_homomorphisms) a.on_hom_html = inline(String(fm.on_homomorphisms));
+    if (typeof fm.functorial === "boolean") a.functorial = fm.functorial;
+    if (typeof fm.invertible === "boolean") a.invertible = fm.invertible;
+    if (Array.isArray(fm.assumes) && fm.assumes.length) a.assumes = fm.assumes.map(String);
     arrows.push(a);
     if (!twoLevel && fm.kind === "instance" && trees.has(fm.to)) {
       const values_html = {};
@@ -509,10 +533,12 @@ function authoredPositions(vaultDir, trees, objectIds) {
 }
 
 // Links inside the structure head: a tree by its title, an arrow by its title.
-function treeLink(id, trees) {
+// Through the renderer, so a generated row's reference wears exactly what a
+// reference in a body wears — one affordance, one marker, one place.
+function treeLink(id, trees, lang) {
   return trees.has(id)
-    ? `<a href="#" class="treelink" data-open="${escapeHtml(id)}">${renderTitle(trees.get(id).fm.title)}</a>`
-    : `<code>${escapeHtml(id)}</code>`;
+    ? refHtml(id, renderTitle(trees.get(id).fm.title), taxonOf(trees), { lang, taxa: TAXON_LABEL })
+    : refHtml(id, escapeHtml(id), () => false, { lang, taxa: TAXON_LABEL });
 }
 
 function kindChip(kind) {
@@ -530,10 +556,10 @@ function assumesRow(fm) {
 // What a tree that is neither object nor arrow says in its head: what it is
 // about, for which fields, and what it assumes. Needs no structure graph, so
 // a 0.2 vault without objects still shows it.
-function aboutHead(fm, trees) {
+function aboutHead(fm, trees, lang) {
   const rows = [];
   if (Array.isArray(fm.about) && fm.about.length) {
-    rows.push(headRow("About", fm.about.map((target) => treeLink(target, trees)).join(", ")));
+    rows.push(headRow("About", fm.about.map((target) => treeLink(target, trees, lang)).join(", ")));
   }
   if (Array.isArray(fm.fields) && fm.fields.length) {
     rows.push(headRow("Fields", fm.fields.map((x) => `<span class="field-chip">${escapeHtml(x)}</span>`).join(" ")));
@@ -550,7 +576,7 @@ function aboutHead(fm, trees) {
 function structHead(id, fm, trees, structure, lang) {
   const inline = (text) => renderInline(text, trees, lang);
   const row = headRow;
-  const link = (target) => treeLink(target, trees);
+  const link = (target) => treeLink(target, trees, lang);
   const rows = [];
   if (fm.taxon === "object" && structure.twoLevel) {
     return objectHead03(id, fm, trees, structure, lang);
@@ -615,7 +641,7 @@ function structHead(id, fm, trees, structure, lang) {
     const math = fm.statement ? `<div class="sh-math">${renderMath(String(fm.statement), true)}</div>` : "";
     return `<div class="struct-head">${math}${rows.join("")}</div>`;
   }
-  return aboutHead(fm, trees);
+  return aboutHead(fm, trees, lang);
 }
 
 const levelChip = (level) =>
@@ -627,7 +653,7 @@ const levelChip = (level) =>
 // that sentence and carries what the arrows out of its kind yield on it.
 function objectHead03(id, fm, trees, structure, lang) {
   const inline = (text) => renderInline(text, trees, lang);
-  const link = (target) => treeLink(target, trees);
+  const link = (target) => treeLink(target, trees, lang);
   const o = structure.objects.find((x) => x.id === id) ?? { level: "kind" };
   const kind = kindOf(fm, trees);
   const rows = [headRow("Level", levelChip(o.level))];
@@ -677,7 +703,7 @@ function defFigure(id, data, trees, lang) {
     lines.push(`${name(f.from)} -> ${name(f.to)}${lbl ? ` : ${lbl} [above]` : ""}`);
   }
   const btn = `<button class="def-focus" data-focus="${escapeHtml(id)}">Show the definition on the canvas</button>`;
-  return `<div class="struct-def">${renderCd(lines.join("\n"), { has: (x) => trees.has(x), lang })}${btn}</div>`;
+  return `<div class="struct-def">${renderCd(lines.join("\n"), { has: taxonOf(trees), lang, taxa: TAXON_LABEL })}${btn}</div>`;
 }
 
 // An arrow from an object to itself, unrolled: three copies of the object and
@@ -693,7 +719,7 @@ function chainFigure(fm, trees, lang) {
     "D @ 3,0 : \\cdots",
     ...["A -> B", "B -> C", "C -> D"].map((ends) => `${ends} : ${label} [above]`),
   ].join("\n");
-  return `<div class="struct-chain"><h3 class="ssec">Unrolled loop</h3>${renderCd(source, { has: (id) => trees.has(id), lang })}</div>`;
+  return `<div class="struct-chain"><h3 class="ssec">Unrolled loop</h3>${renderCd(source, { has: taxonOf(trees), lang, taxa: TAXON_LABEL })}</div>`;
 }
 
 // The 0.3 canvas: a region frame per labelled area, then one box per object in
@@ -714,15 +740,18 @@ function structureSvg03(structure, trees) {
       const p = structure.pos[o.id];
       const inst = o.level === "instance";
       const w = o.w, h = o.h;
-      // The tag shares the instance box's only text line, so the title stops short of it.
-      const title = wrapLabel(o.title, inst ? 14 : 24, 1)[0] ?? "";
-      const level = `<text class="nlevel" x="${w - 6}" y="${inst ? 13 : h - 8}" text-anchor="end">${LEVEL_LABEL[o.level]}</text>`;
-      // The id and the level tag share the bottom line of a kind box, so the id
-      // gets only the room the tag leaves it. Both limits were set against the
-      // longer Croatian words; "kind" is short enough that a kind box now has
-      // about 50px of slack on that line, and "instance" leaves an instance's
-      // 14-character title some 5px — measured clear at every box in Monsky and
-      // mini, and the number to lower first if a tighter title ever touches it.
+      // The word "instance" has left the box: the kind TAG under it says which
+      // kind this is one of, and the register (smaller, filled, dashed) says it
+      // is an instance — so the title gets the whole line back. 14 characters
+      // was the room the word left it, which turned "The field a size is put
+      // on" into "The field a si…" on every one of Monsky's 38 instances; 24
+      // measures clear in the 130px the box gives a 10.5px line.
+      const title = wrapLabel(o.title, inst ? 24 : 24, 1)[0] ?? "";
+      const level = inst
+        ? ""
+        : `<text class="nlevel" x="${w - 6}" y="${h - 8}" text-anchor="end">${LEVEL_LABEL.kind}</text>`;
+      // The id and the level word share the bottom line of a kind box, so the
+      // id gets only the room the word leaves it.
       const idMax = inst ? 18 : 14;
       const shortId = o.id.length > idMax ? o.id.slice(0, idMax - 1) + "…" : o.id;
       return (
@@ -737,7 +766,11 @@ function structureSvg03(structure, trees) {
       );
     })
     .join("\n");
-  return `<g id="sregions">${regions}</g><g id="sties"></g><g id="sedges"></g>\n${boxes}`;
+  // `sties` and `stypes` are empty in the file and stay empty at rest: a tie to
+  // a kind and the type-level edge behind an arrow are drawn only while the
+  // reader is highlighting the thing they belong to. See the two levels in
+  // lib/client/forest.js.
+  return `<g id="sregions">${regions}</g><g id="stypes"></g><g id="sties"></g><g id="sedges"></g>\n${boxes}`;
 }
 
 // Object boxes for the Structure layer, positioned at build time; instance
@@ -839,7 +872,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
       `<div class="panel-head"><span class="chip" style="--c:${TAXON_COLOR[t.fm.taxon]}">` +
       `${TAXON_LABEL[t.fm.taxon]}</span><h2>${renderTitle(t.fm.title)}</h2>` +
       `<div class="panel-id">${escapeHtml(id)}${src ? " · " + escapeHtml(src) : ""}</div></div>` +
-      (structure ? structHead(id, t.fm, trees, structure, lang) : structured ? aboutHead(t.fm, trees) : "") +
+      (structure ? structHead(id, t.fm, trees, structure, lang) : structured ? aboutHead(t.fm, trees, lang) : "") +
       renderBody(t.body, trees, lang) +
       (structure && isLoop ? chainFigure(t.fm, trees, lang) : "") +
       (isStruct ? `<div class="struct-sections" data-id="${escapeHtml(id)}"></div>` : "") +
@@ -923,15 +956,19 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
   const levelLegend = structure?.twoLevel
     ? `<span class="lg"><i class="lgb lgb-kind"></i>${LEVEL_LABEL.kind}</span>` +
       `<span class="lg"><i class="lgb lgb-inst"></i>${LEVEL_LABEL.instance}</span>` +
+      // The type level is drawn only while something is highlighted, so this
+      // swatch is where a reader finds out it exists at all.
+      `<span class="lg" title="Hover an instance for the line to its kind, or an arrow between two instances for the type-level edge behind it."><i class="lgb lgb-type"></i>type level — on hover</span>` +
       `<span class="lgsep"></span>`
     : "";
   const kindLegend = levelLegend + kindsPresent
     .map((k) => `<span class="lg"><i style="background:${KIND_COLOR[k]}"></i>${KIND_LABEL[k]}</span>`)
     .join("");
   const markers = Object.keys(KIND_LABEL)
+    .concat(twoLevel ? ["type"] : [])
     .map(
       (k) =>
-        `<marker id="ah-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${KIND_COLOR[k]}"/></marker>`
+        `<marker id="ah-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${k === "type" ? TAXON_COLOR.object : KIND_COLOR[k]}"/></marker>`
     )
     .join("");
   const hasCd = Object.values(contentHtml).some((h) => h.includes('<figure class="cd"'));
@@ -984,6 +1021,10 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
   };
   const dataJson = JSON.stringify(data).replace(/</g, "\\u003c");
   const contentJson = JSON.stringify(contentHtml).replace(/</g, "\\u003c");
+  // The renderer's own reference table, handed to the page: the structure
+  // panel builds references for rows no wikilink ever wrote, and it must mark
+  // them with the same glyphs and say the same thing about a missing tree.
+  const refJson = JSON.stringify(refData(lang)).replace(/</g, "\\u003c");
   const structureJson = structure
     ? JSON.stringify({
         objects: structure.objects,
@@ -1024,6 +1065,7 @@ function buildHtml(vaultDir, vault, ids, edges, groups, proofsOf, structure) {
 <style>
 ${katexCss()}
 ${cdCss()}
+${refCss(TAXON_COLOR)}
 ${clientCss()}</style>
 </head>
 <body>
@@ -1063,8 +1105,9 @@ ${structure ? `  <div id="divider" title="Drag to change the split"></div>
 <div id="strip" class="empty"><div class="strip-bar"><button id="strip-toggle" class="strip-title">▾ Diagrams <span id="strip-count"></span></button><div id="strip-tabs"></div></div><div id="strip-body"></div></div>` : ""}${twoLevel ? `
 <div id="focusbar" hidden><span id="fb-what"></span><button id="fb-back">Back to the whole graph</button></div>
 <div id="layoutbar" hidden><span id="lb-msg"></span><button id="lb-save" hidden>Save arrangement</button><button id="lb-copy">Copy</button><a id="lb-dl" download="structure-layout.json">Download</a><button id="lb-undo">Undo moves</button><textarea id="lb-json" readonly hidden></textarea></div>` : ""}
-<div id="footer"><span>Generated ${escapeHtml(forest.created ?? "")} · forest-digest · click a group to open or close it, click a card to open its content — clicking the same card again closes it (so does Esc)</span>${twoLevel ? `<span id="shint">Structure: drag a box to move it · click a box to open its content, click again to close · click a kind to see its defining diagram · empty background pans the canvas · dimmed things stay clickable</span>` : ""}<button id="resetProg">Reset progress</button><span id="storage-note"></span></div>
+<div id="footer"><span>Generated ${escapeHtml(forest.created ?? "")} · forest-digest · click a group to open or close it, click a card to open its content — clicking the same card again closes it (so does Esc)</span>${twoLevel ? `<span id="shint">Structure: drag a box to move it · click a box to open its content, click again to close · an instance carries a <b>∈ kind</b> tag — click it to open the kind, hover the box to see the line to it · hover an arrow between two instances to raise the type-level edge behind it, click that edge for both types' context · click a kind to see its defining diagram · empty background pans the canvas · dimmed things stay clickable</span>` : ""}<button id="resetProg">Reset progress</button><span id="storage-note"></span></div>
 <script>window.FOREST = ${dataJson};</script>
+<script>window.FOREST_REF = ${refJson};</script>
 <script>window.TREES = ${contentJson};</script>
 ${structure ? `<script>window.STRUCTURE = ${structureJson};</script>
 ` : ""}<script>

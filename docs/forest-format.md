@@ -1180,6 +1180,53 @@ in its output is `forest.json`'s `created`).
   The validator treats `forest.html` as optional — old vaults without it
   remain valid — but when the file exists it must be non-empty.
 
+### The two levels on the canvas — a tag at rest, a line on demand
+
+**A view feature, not a format change: it adds no key to any tree and reads
+only `instance_of`, `hom`, `data` and `needs`, which 0.3 already defines.**
+
+An instance is not joined to its kind by a drawn line. It carries a **tag**
+instead — `∈ <the kind's title>`, hanging quietly under the box, clickable,
+opening the kind. Fifteen kinds and thirty-eight instances made the drawn
+version a picture of lines converging on a handful of hubs, and converging
+lines claim a relationship between everything they join, when all these ones
+said was *these boxes share a type* — which one word says better.
+
+What the lines did carry is a hover away, and nothing of it stands on the
+canvas at rest:
+
+- **highlight an instance** — hover it, or open its panel — and the line to
+  its kind appears, and the kind's box answers in the same colour;
+- **highlight an arrow between two instances** and the **type edge** behind it
+  appears between the two kinds, with both ties, so the whole path reads at
+  once: this box, its kind, the shape of the relationship, the other kind,
+  that box. An arrow whose two ends are already kinds raises nothing — it
+  *is* the type level.
+
+A type edge is **not a tree**. It is the pair of kinds that a set of concrete
+arrows have in common once their ends are read one level up, and its page is
+assembled by the viewer out of those arrows: each one's `statement`, its
+`needs` (which is exactly "what is assumed beyond the bare types"), its
+`on_homomorphisms` and `functorial` where it has them, plus each kind's own
+`hom` sentence, its `data` components and its defining diagram. Several
+concrete arrows may share one type edge — three of Monsky's homs are maps
+between two fields — and the page shows them all, because that the vault needs
+three of them is the information. The page's last line says it was assembled
+this way. A type edge is addressable as `#tree=type:<kindA>|<kindB>`, and an
+arrow's own panel carries a row to it, so it stays reachable when its kinds
+are off screen.
+
+### References look like references
+
+Every `[[wikilink]]`, and every generated row that points at a tree, renders
+as an underlined anchor with a small marker in its **target's taxon colour** —
+`□` an object, `→` an arrow, `◆` a statement, `≡` a definition, `⊢` a proof,
+`◇` an example, `¶` prose — and names the target in its tooltip. Following one
+behaves differently by taxon, so the reader is told which before clicking.
+A wikilink whose target the vault does not hold is **not** an anchor, as
+before, but it is no longer invisible prose: it is struck through in the muted
+colour and says on hover that there is no such tree.
+
 ### Filters over a view — the expression language
 
 **This is a view feature, not a format change: it adds no key to any tree.**
@@ -1284,7 +1331,7 @@ bar's *Back to the whole graph* is the exit that restores the pan and zoom.
 | `clear()` | Drops the filter and the link highlight. |
 | `hide(on)` | Switches dimming for hiding. |
 | `link(id)` | Lights one id's `about` neighbourhood — the cross-link, driven from outside. |
-| `select(id)` | Opens a tree's panel, as a click would. |
+| `select(id)` | Opens a tree's panel, as a click would — and a type edge's page for `type:<kindA>\|<kindB>`, the same id the hash takes, so a tutor can point a member at the level above an arrow. |
 | `close()` | Closes the panel and deselects — what clicking the open card again does. |
 | `arrangement(next)` | `"split"` (two panes) or `"plane"` (one shared plane); with no argument, reports the current one. |
 | `back()` / `forward()` | One step along the trail below. Asynchronous: the step goes through the browser's own history, so the page cannot observe it in the same turn. |
@@ -1300,7 +1347,9 @@ views/forest.html#filter=%7B%22tied-to%22%3A%22obj-valuation%22%7D&hide=1&mode=p
 `filter` is a URL-encoded JSON expression; `hide=1` hides instead of dimming;
 `mode=plane` or `mode=split` picks the arrangement; `pane=structure` or
 `pane=order` folds the other one away; `tree=<id>` opens that tree in the side
-panel; `focus=<obj- id>` zooms the canvas to that kind's defining diagram. The
+panel — or the type edge `type:<kindA>|<kindB>`, url-encoded, since the bar is
+not a tree; `focus=<obj- id>` zooms the canvas to that kind's defining
+diagram. The
 page writes the same hash back as the reader works, so the URL in the address
 bar is always the view they are looking at, ready to paste to somebody else.
 The hash is read last, once the whole page exists to be put into that state.

@@ -2,6 +2,10 @@
   --bg: #14161a; --panel: #1a1d23; --card: #21252d; --card-hi: #2a2f3a;
   --border: #343a46; --fg: #e4e6ea; --fg-muted: #9aa1ad; --accent: #5b9dd9;
   --st-done: #6fbf73; --st-ready: #6fb1e8;
+  /* The register of the level above: a kind box's edge, an instance's ∈ tag,
+     the tie up to a kind, a raised type edge. One colour for "this is about
+     the type, not the structure", so the two levels never blur. */
+  --level: #e9d66b;
 }
 * { box-sizing: border-box; margin: 0; }
 html, body { height: 100%; }
@@ -206,15 +210,45 @@ body.has-struct:not(.fold-structure) #slegend { display: flex; }
 .snode.sinst .ntitle { font-size: 10.5px; }
 .sbox { cursor: grab; }
 .sbox:active { cursor: grabbing; }
-.stie { stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 3 4; fill: none; opacity: .55; }
-/* A tie too long to draw ends in its kind's name, so it has to be read. */
-.stie.far { stroke-width: 1.4; opacity: .8; }
-.stie-name { fill: var(--fg-muted); font-size: 9.5px; font-style: italic; pointer-events: none; }
+/* --- the two levels: the ∈ tag, the tie on demand, the type edge ---------- */
+/* An instance's kind is a WORD on the box, not a line to it. Fifteen kinds
+   with thirty-eight ties made every kind a hub of converging lines whose only
+   message was "these share a type" — which a word says better and quieter.
+   The tag hangs under the box because inside it would fight a 42px card's
+   title and the author's symbol, and kind names run to 46 characters. */
+.stag { position: absolute; font-size: 9.5px; line-height: 13px; font-style: italic;
+  color: color-mix(in srgb, var(--level) 72%, var(--fg-muted)); white-space: nowrap;
+  pointer-events: auto; cursor: pointer; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.stag:hover { color: var(--level); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--level) 60%, transparent); }
+.stag .stag-in { margin-right: 4px; font-style: normal; opacity: .75; }
+/* The tie exists only while its instance is highlighted — see the two levels
+   in forest.js — so it may be as plain as it likes: nothing is competing
+   with it at the moment it is drawn. */
+.stie { stroke: color-mix(in srgb, var(--level) 75%, transparent); stroke-width: 1.4;
+  stroke-dasharray: 4 3; fill: none; }
+/* A raised type edge: the relationship one level up, in the level's own
+   colour so it can never be read as one of the canvas's own arrows. */
+.stype .line { fill: none; stroke: var(--level); stroke-width: 2.2; stroke-dasharray: 7 4; }
+.stype .hit { fill: none; stroke: transparent; stroke-width: 16; cursor: pointer; }
+.stype:hover .line, .stype.stype-on .line { stroke-dasharray: none; stroke-width: 2.8; }
+.stype-lbl { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer;
+  background: var(--bg); border: 1px solid color-mix(in srgb, var(--level) 60%, transparent);
+  color: color-mix(in srgb, var(--level) 85%, var(--fg)); border-radius: 4px;
+  padding: 0 6px; font-size: 11px; line-height: 17px; white-space: nowrap; }
+.stype-lbl:hover, .stype-lbl.stype-on { border-color: var(--level); color: var(--level); }
+/* The kind a raised tie or edge points at answers back, so "this instance
+   contributes its type" is legible at the other end of the line. */
+.snode.tlit rect:first-of-type, .sbox.tlit .snode rect:first-of-type { stroke: var(--level); stroke-width: 2; }
+.sbox.tlit { opacity: 1; }
 .sreg-box { fill: color-mix(in srgb, var(--fg) 4%, transparent); stroke: color-mix(in srgb, var(--fg) 9%, transparent); }
 .sreg-title { fill: var(--fg-muted); font-size: 11px; font-weight: 500; letter-spacing: .07em; opacity: .78; pointer-events: none; }
 #slegend .lgb { width: 14px; height: 9px; border-radius: 2px; display: inline-block; background: var(--card); border: 1px solid var(--border); }
-#slegend .lgb-kind { border-left: 3px solid #e9d66b; }
-#slegend .lgb-inst { background: color-mix(in srgb, #e9d66b 13%, var(--card-hi)); border-style: dashed; border-color: #e9d66b; }
+#slegend .lgb-kind { border-left: 3px solid var(--level); }
+#slegend .lgb-inst { background: color-mix(in srgb, var(--level) 13%, var(--card-hi)); border-style: dashed; border-color: var(--level); }
+/* The type level is invisible at rest, which is the point — so the legend is
+   where a reader learns it is there at all, and what raises it. */
+#slegend .lgb-type { width: 16px; height: 0; border-radius: 0; background: none;
+  border: none; border-top: 2px dashed var(--level); align-self: center; }
 #shint { display: none; }
 body.has-struct:not(.fold-structure) #shint { display: inline; }
 /* Zoomed into one definition: everything else stays on screen, out of the way —
@@ -239,8 +273,31 @@ body.sfocus .sedge.off:hover { opacity: 0.6; }
 #panel .def-focus { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 #panel .def-focus:hover { background: var(--card-hi); }
 .level-chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-muted); }
-.level-chip.lvl-kind { border-color: #e9d66b; color: #e9d66b; background: color-mix(in srgb, #e9d66b 18%, transparent); }
-.level-chip.lvl-instance { border-style: dashed; border-color: #e9d66b; color: #e9d66b; background: color-mix(in srgb, #e9d66b 10%, transparent); }
+.level-chip.lvl-kind { border-color: var(--level); color: var(--level); background: color-mix(in srgb, var(--level) 18%, transparent); }
+.level-chip.lvl-instance { border-style: dashed; border-color: var(--level); color: var(--level); background: color-mix(in srgb, var(--level) 10%, transparent); }
+
+/* --- the type edge's page ------------------------------------------------- */
+/* Nothing in the vault authors this page: it is assembled from the concrete
+   arrows, which is why the last line says so and why the two sides are framed
+   as quotations of their kinds rather than as prose. */
+.te-side { margin: 8px 0 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--level) 35%, var(--border)); border-radius: 8px; background: var(--card); }
+.te-side-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; margin-bottom: 4px; }
+.te-sym { text-align: center; margin: 4px 0 8px; overflow-x: auto; }
+.te-def { margin: 6px 0 0; }
+.te-def .cd { padding-left: 0; padding-right: 0; }
+.te-arrow { margin: 8px 0 14px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.te-arrow-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+.te-stm { text-align: center; margin: 4px 0 8px; overflow-x: auto; font-size: 13px; }
+.te-row { display: flex; gap: 10px; margin: 3px 0; font-size: 13px; }
+.te-k { flex: 0 0 112px; color: var(--fg-muted); font-size: 12px; }
+.te-v { flex: 1; min-width: 0; }
+.te-v .sep { color: var(--fg-muted); margin: 0 2px; }
+.te-none { color: var(--fg-muted); font-style: italic; }
+ul.te-needs { margin: 0; padding-left: 16px; }
+div.te-needs { color: var(--fg-muted); font-style: italic; }
+.te-made { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 10px;
+  font-size: 12px; color: var(--fg-muted); }
+.te-made code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 
 /* --- two arrangements of one working area -------------------------------- */
 /* Side by side is the default: the requirements graph and the structure graph

@@ -21,11 +21,66 @@ export function renderMath(tex, displayMode) {
   }
 }
 
-function wikilinkHtml(target, label, has) {
-  target = target.trim();
-  const shown = label ?? target;
-  if (!has(target)) return escapeHtml(shown);
-  return `<a href="#" class="treelink" data-open="${escapeHtml(target)}">${escapeHtml(shown)}</a>`;
+// ─── References ─────────────────────────────────────────────────────────────
+//
+// A reference to a tree has to announce itself, and say what it points at:
+// an object, an arrow, a theorem and a proof all behave differently when
+// followed, and a panel full of coloured mathematics swallows a bare accent
+// colour whole. So every reference wears an underline and a small marker in
+// its target's taxon colour. `has(id)` may answer with the target's taxon
+// instead of a bare true, and the marker then says which sort of thing waits
+// on the other side; a predicate that only answers true/false still gets the
+// underline and a neutral marker.
+//
+// A dead reference — a wikilink whose target this vault does not hold — stays
+// unclickable, as it always has, but it is no longer invisible: it is struck
+// through in the muted colour and says so on hover, because prose the reader
+// cannot tell from the author's own words is the worst of the three states.
+export const REF_GLYPH = {
+  object: "□", morphism: "→",
+  theorem: "◆", lemma: "◆", proposition: "◆", corollary: "◆",
+  axiom: "⊙", definition: "≡", proof: "⊢",
+  example: "◇", exercise: "▷",
+  exposition: "¶", motivation: "¶", intuition: "¶", remark: "¶",
+  connection: "⇄",
+};
+// Templates, not functions, because the viewer's own JavaScript also builds
+// references — a generated panel row is no wikilink and never passes through
+// here — and it has to say exactly what this file says. `refData(lang)` hands
+// that page the one glyph table and the one wording for a dead reference, so
+// the two surfaces cannot drift into disagreeing about a missing tree.
+const REF_T = {
+  hr: { dead: "nema stabla „%s” u ovom trezoru" },
+  en: { dead: 'no tree "%s" in this vault' },
+};
+export function refData(lang) {
+  return { glyph: REF_GLYPH, dead: (REF_T[lang] ?? REF_T.hr).dead };
+}
+// A function replacement, so an id carrying `$&` cannot rewrite the sentence.
+function fillDead(tmpl, id) {
+  return tmpl.replace("%s", () => id);
+}
+
+// `inner` is finished HTML — escaped text from a wikilink, or a title whose
+// math is already typeset — so one function serves both callers.
+export function refHtml(target, inner, has, opts = {}) {
+  const id = String(target).trim();
+  const found = has(id);
+  const T = REF_T[opts.lang] ?? REF_T.hr;
+  if (!found) {
+    return `<span class="treelink tl-dead" title="${escapeHtml(fillDead(T.dead, id))}">` +
+      `<span class="tl-mark" aria-hidden="true">⊘</span>${inner}</span>`;
+  }
+  const taxon = typeof found === "string" ? found : "";
+  const word = (opts.taxa && opts.taxa[taxon]) || taxon;
+  return `<a href="#" class="treelink${taxon ? ` tl-${taxon}` : ""}"` +
+    ` data-open="${escapeHtml(id)}"${taxon ? ` data-taxon="${escapeHtml(taxon)}"` : ""}` +
+    ` title="${escapeHtml(word ? `${word} · ${id}` : id)}">` +
+    `<span class="tl-mark" aria-hidden="true">${REF_GLYPH[taxon] ?? "◦"}</span>${inner}</a>`;
+}
+
+function wikilinkHtml(target, label, has, opts) {
+  return refHtml(target, escapeHtml(label ?? String(target).trim()), has, opts);
 }
 
 // A fenced block tagged `cd`, closing fence on its own line.
@@ -35,6 +90,8 @@ const CD_FENCE = /^[ \t]{0,3}```[ \t]*cd[ \t]*\r?\n([\s\S]*?)^[ \t]{0,3}```[ \t]
 // their target exists (`has(id)`), then let marked do the rest and splice the
 // KaTeX back in. `opts.lang` ("hr" | "en") picks the language of diagram
 // captions; it defaults to Croatian like every other UI string here.
+// `opts.taxa` maps a taxon to the word a tooltip shows for it, so the
+// reference marker can name what it points at without a second table here.
 export function renderBody(body, has, opts = {}) {
   const chunks = [];
   const blocks = new Set();
@@ -48,7 +105,7 @@ export function renderBody(body, has, opts = {}) {
   // blank lines make the placeholder its own paragraph, which is unwrapped
   // after marked so the <figure> never sits inside a <p>.
   let text = body.replace(CD_FENCE, (_, src) =>
-    `\n\n${stash(renderCd(src, { has, lang: opts.lang }), true)}\n\n`
+    `\n\n${stash(renderCd(src, { has, lang: opts.lang, taxa: opts.taxa }), true)}\n\n`
   );
   text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) =>
     stash(renderMath(tex.trim(), true))
@@ -58,10 +115,11 @@ export function renderBody(body, has, opts = {}) {
   text = text.replace(/(^|[^\\$])\$((?:[^$\n]|\n(?!\n))+?)\$/g, (m, pre, tex) =>
     pre + stash(renderMath(tex.replace(/\n/g, " "), false))
   );
-  text = text.replace(WIKILINK, (_, target, label) => {
-    const html = wikilinkHtml(target, label, has);
-    return html.startsWith("<a ") ? stash(html) : html;
-  });
+  // Both a live and a dead reference are HTML now, so both are stashed —
+  // otherwise marked would find markup inside a dead one's title.
+  text = text.replace(WIKILINK, (_, target, label) =>
+    stash(wikilinkHtml(target, label, has, opts))
+  );
   let html = marked.parse(text, { async: false });
   html = html.replace(/<p>%%KTX(\d+)%%<\/p>\n?/g, (m, i) =>
     blocks.has(Number(i)) ? chunks[Number(i)] : m
@@ -393,7 +451,7 @@ function equationHtml(eq, arrowByName) {
   return lhs == null || rhs == null ? null : renderMath(`${lhs} = ${rhs}`, false);
 }
 
-export function renderCd(source, { has = () => false, lang = "hr" } = {}) {
+export function renderCd(source, { has = () => false, lang = "hr", taxa = null } = {}) {
   const T = CD_T[lang] ?? CD_T.hr;
   const d = parseCd(source, lang);
   const cols = Math.max(1, ...d.corners.map((c) => c.col + 1));
@@ -430,7 +488,7 @@ export function renderCd(source, { has = () => false, lang = "hr" } = {}) {
     const paths = `<span class="cd-eq-paths" title="${names}">${equationHtml(eq, arrowByName) ?? names}</span>`;
     const why = eq.why === "def"
       ? escapeHtml(T.byDef)
-      : eq.why.replace(WIKILINK, (_, target, label) => wikilinkHtml(target, label, has));
+      : eq.why.replace(WIKILINK, (_, target, label) => wikilinkHtml(target, label, has, { lang, taxa }));
     caption.push(`<div class="cd-eq">${escapeHtml(T.commutes)}: ${paths} (${why})</div>`);
   }
   for (const e of d.errors) caption.push(`<div class="cd-error">${escapeHtml(e)}</div>`);
@@ -465,5 +523,48 @@ export function cdCss() {
 .cd-title { display: block; font-weight: 600; color: var(--cd-fg); margin-bottom: .1em; }
 .cd-eq-paths { font-family: KaTeX_Math, "Times New Roman", serif; font-style: italic; font-size: 1.1em; }
 .cd-error { color: var(--cd-error); }
+`;
+}
+
+// The reference's stylesheet, beside the renderer that emits it, for every
+// page that shows a tree body — the panel, the diagram strip, a bridge answer.
+// The taxon colours are PASSED IN rather than repeated here: the page that
+// knows the palette hands it over, so the one table stays the one table and
+// a renderer with no palette still underlines and marks every reference.
+//
+// The marker is inline-block on purpose. text-decoration is not propagated
+// into an atomic inline-level box, so the underline stops at the word and
+// does not run through the glyph.
+//
+// The TAXON COLOUR IS THE MARKER'S, not the word's, and that is deliberate
+// twice over. The owner asked for a marker that does not shout ("do not make
+// it loud, the panels are dense"), and a body with two thousand references in
+// fourteen colours of prose is exactly that; and the word's own colour is not
+// this stylesheet's to win anyway — the viewer's `#panel a` outranks any class
+// selector, so a `.treelink { color: … }` here lost every argument inside the
+// panel while winning outside it, which is worse than either. A direct rule on
+// the marker span beats an inherited colour whatever the host page says, so
+// the glyph carries the taxon, and the underline carries it quietly at half
+// strength. The generated `--tl-c` rules reach the reader this way: fourteen
+// taxa in the Monsky vault resolve to eleven glyph colours — the families
+// share, lemma with proposition, motivation with exposition — against the one
+// accent the words had before.
+export function refCss(colors = {}) {
+  const rules = Object.keys(colors)
+    .map((t) => `.treelink.tl-${t} { --tl-c: ${colors[t]}; }`)
+    .join("\n");
+  return `
+.treelink { --tl-c: var(--accent, #5b9dd9); color: var(--accent, #5b9dd9);
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--tl-c) 50%, transparent); }
+a.treelink:hover { text-decoration-color: var(--tl-c); }
+.treelink .tl-mark { display: inline-block; margin-right: .22em; font-size: .8em;
+  line-height: 1; opacity: .9; color: var(--tl-c); }
+/* A dead reference is legible, obviously dead, and not a target: dotted,
+   struck through, in the muted colour, never in a taxon's — and it is a span,
+   so no host rule for links reaches it and the colour here is the last word. */
+.treelink.tl-dead { --tl-c: var(--fg-muted, #8a8f98); color: var(--tl-c); cursor: help;
+  text-decoration-line: underline line-through; text-decoration-style: dotted; }
+${rules}
 `;
 }

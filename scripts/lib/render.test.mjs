@@ -4,7 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cdCss, renderBody, renderCd } from "./render.mjs";
+import { cdCss, escapeHtml, refCss, refData, refHtml, renderBody, renderCd } from "./render.mjs";
 
 const SQUARE = `% title: ekvivarijantnost
 GX @ 0,0 : G\\times X
@@ -82,9 +82,17 @@ test("an equation whose paths do not share endpoints is reported", () => {
 test("a wikilink justification becomes a panel anchor when the tree exists", () => {
   const src = SQUARE.replace(": def", ": [[thm-orbit-stabilizer]]");
   const linked = renderCd(src, { has: (id) => id === "thm-orbit-stabilizer" });
-  assert.match(linked, /komutira: <span class="cd-eq-paths" title="a c = b d">.+?<\/span> \(<a href="#" class="treelink" data-open="thm-orbit-stabilizer">thm-orbit-stabilizer<\/a>\)/s);
+  assert.match(linked, /komutira: <span class="cd-eq-paths" title="a c = b d">.+?<\/span> \(<a href="#" class="treelink" data-open="thm-orbit-stabilizer" title="thm-orbit-stabilizer"><span class="tl-mark" aria-hidden="true">◦<\/span>thm-orbit-stabilizer<\/a>\)/s);
+  // A taxon answer picks the marker and names the target in the tooltip.
+  const typed = renderCd(src, { has: (id) => (id === "thm-orbit-stabilizer" ? "theorem" : false), taxa: { theorem: "theorem" } });
+  assert.ok(typed.includes('class="treelink tl-theorem"'));
+  assert.ok(typed.includes('data-taxon="theorem"'));
+  assert.ok(typed.includes('title="theorem · thm-orbit-stabilizer"'));
+  // A dead reference is visible as dead, and is not an anchor.
   const plain = renderCd(src);
-  assert.ok(plain.includes("(thm-orbit-stabilizer)"));
+  assert.ok(plain.includes('class="treelink tl-dead"'));
+  assert.ok(plain.includes("nema stabla „thm-orbit-stabilizer”"));
+  assert.ok(!/<a[^>]*thm-orbit-stabilizer/.test(plain));
   const bad = renderCd(SQUARE.replace(": def", ": because"));
   assert.ok(bad.includes("obrazloženje jednakosti mora biti def ili [[wikilink]]"));
 });
@@ -189,7 +197,7 @@ Poslije $$\\int f$$.`;
   assert.equal(count(html, /<figure class="cd"/g), 1);
   assert.ok(!html.includes("<p><figure"));
   assert.ok(html.includes('<pre><code class="language-js">let a = 1;'));
-  assert.ok(html.includes('class="treelink" data-open="def-group"'));
+  assert.ok(html.includes('data-open="def-group"'));
   assert.ok(html.includes("katex-display"));
   assert.ok(html.includes("komutira:"));
   const en = renderBody("```cd\n" + SQUARE + "\n```", () => false, { lang: "en" });
@@ -198,6 +206,59 @@ Poslije $$\\int f$$.`;
   const tight = renderBody("Tekst\n```cd\nA @ 0,0 : A\n```\n", () => false);
   assert.ok(tight.includes("<p>Tekst</p>"));
   assert.ok(!tight.includes("<p><figure"));
+});
+
+test("refCss covers every class a reference emits, and takes the palette", () => {
+  const css = refCss({ object: "#e9d66b", theorem: "#e0a458" });
+  for (const cls of ["treelink", "tl-mark", "tl-dead", "tl-object", "tl-theorem"]) {
+    assert.ok(css.includes(`.${cls}`), cls);
+  }
+  assert.ok(css.includes("#e9d66b"));
+  // No palette is still a working stylesheet: every reference underlines.
+  assert.ok(refCss().includes(".treelink"));
+  assert.ok(!refCss().includes("tl-object"));
+  // The taxon colour must land on the MARKER, by a rule that matches it
+  // directly: a host page styling its own links (`#panel a` in the viewer)
+  // outranks any class selector here, so a colour on the word alone was
+  // thrown away wherever it mattered and fourteen of these rules were dead.
+  assert.match(css, /\.treelink \.tl-mark \{[^}]*color: var\(--tl-c\)/);
+  // A dead reference is a span, so the muted colour is this file's to set.
+  assert.match(css, /\.treelink\.tl-dead \{[^}]*color: var\(--tl-c\)/);
+});
+
+test("refData hands a page the renderer's own glyphs and dead wording", () => {
+  const en = refData("en"), hr = refData("hr");
+  // The viewer builds references the renderer never sees — a generated panel
+  // row is no wikilink — and it reads its glyphs from here, so the table has
+  // to be the table this file actually prints.
+  const taxa = ["object", "morphism", "theorem", "definition", "proof", "example"];
+  const body = renderBody(taxa.map((t) => `[[x-${t}]]`).join(" "), (id) => id.slice(2));
+  for (const t of taxa) assert.ok(body.includes(`>${en.glyph[t]}</span>`), t);
+  // And the same sentence about a missing tree, in both languages.
+  for (const [lang, data] of [["en", en], ["hr", hr]]) {
+    assert.ok(data.dead.includes("%s"), lang);
+    const dead = renderBody("[[def-nema]]", () => false, { lang });
+    assert.ok(dead.includes(escapeHtml(data.dead.replace("%s", "def-nema"))), lang);
+  }
+  // An unknown language falls back to Croatian, exactly as refHtml does.
+  assert.equal(refData("sv").dead, hr.dead);
+  // An id is substituted literally: `$&` in a replacement is a back-reference,
+  // and one slipping through would rewrite the sentence around it.
+  const odd = refHtml("obj-$&x", "o", () => false, { lang: "en" });
+  assert.ok(odd.includes('no tree &quot;obj-$&amp;x&quot; in this vault'), odd);
+});
+
+test("a reference says what it points at, in a body and in a dead link", () => {
+  const taxa = { object: "object", morphism: "arrow" };
+  const has = (id) => (id === "obj-group" ? "object" : id === "mor-orbits" ? "morphism" : false);
+  const html = renderBody("Vidi [[obj-group]], [[mor-orbits|orbite]] i [[def-nema]].", has, { taxa });
+  assert.ok(html.includes('class="treelink tl-object" data-open="obj-group" data-taxon="object" title="object · obj-group"'));
+  assert.ok(html.includes("□</span>obj-group</a>"));
+  assert.ok(html.includes("→</span>orbite</a>"));
+  assert.ok(html.includes('<span class="treelink tl-dead" title="nema stabla „def-nema”'));
+  assert.ok(html.includes("⊘</span>def-nema</span>"));
+  const en = renderBody("See [[def-nema]].", has, { lang: "en" });
+  assert.ok(en.includes('no tree &quot;def-nema&quot; in this vault'));
 });
 
 test("cdCss covers every class the figure emits", () => {
