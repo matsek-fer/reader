@@ -1105,7 +1105,7 @@ ${structure ? `  <div id="divider" title="Drag to change the split"></div>
 <div id="strip" class="empty"><div class="strip-bar"><button id="strip-toggle" class="strip-title">▾ Diagrams <span id="strip-count"></span></button><div id="strip-tabs"></div></div><div id="strip-body"></div></div>` : ""}${twoLevel ? `
 <div id="focusbar" hidden><span id="fb-what"></span><button id="fb-back">Back to the whole graph</button></div>
 <div id="layoutbar" hidden><span id="lb-msg"></span><button id="lb-save" hidden>Save arrangement</button><button id="lb-copy">Copy</button><a id="lb-dl" download="structure-layout.json">Download</a><button id="lb-undo">Undo moves</button><textarea id="lb-json" readonly hidden></textarea></div>` : ""}
-<div id="footer"><span>Generated ${escapeHtml(forest.created ?? "")} · forest-digest · click a group to open or close it, click a card to open its content — clicking the same card again closes it (so does Esc)</span>${twoLevel ? `<span id="shint">Structure: drag a box to move it · click a box to open its content, click again to close · an instance carries a <b>∈ kind</b> tag — click it to open the kind, hover the box to see the line to it · hover an arrow between two instances to raise the type-level edge behind it, click that edge for both types' context · click a kind to see its defining diagram · empty background pans the canvas · dimmed things stay clickable</span>` : ""}<button id="resetProg">Reset progress</button><span id="storage-note"></span></div>
+<div id="footer"><span>Generated ${escapeHtml(forest.created ?? "")} · viewer ${escapeHtml(VIEWER_VERSION)} · click a group to open or close it, click a card to open its content — clicking the same card again closes it (so does Esc)</span>${twoLevel ? `<span id="shint">Structure: drag a box to move it · click a box to open its content, click again to close · an instance carries a <b>∈ kind</b> tag — click it to open the kind, hover the box to see the line to it · hover an arrow between two instances to raise the type-level edge behind it, click that edge for both types' context · click a kind to see its defining diagram · empty background pans the canvas · dimmed things stay clickable</span>` : ""}<button id="resetProg">Reset progress</button><span id="storage-note"></span></div>
 <script>window.FOREST = ${dataJson};</script>
 <script>window.FOREST_REF = ${refJson};</script>
 <script>window.TREES = ${contentJson};</script>
@@ -1123,6 +1123,16 @@ ${clientJs()}</script>
 // are inlined verbatim, so the page still works from file:// with no network.
 const LIB_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), "lib");
 const CLIENT_DIR = path.join(LIB_DIR, "client");
+// Shown in the footer. A file:// page is cached aggressively by every
+// browser, so without a visible build identity a stale page is
+// indistinguishable from a fresh one — and the vault's own created date,
+// which used to sit there, never changes.
+const VIEWER_VERSION = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(
+      path.join(path.dirname(LIB_DIR), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
+  } catch { return "?"; }
+})();
 function clientJs() {
   return fs.readFileSync(path.join(CLIENT_DIR, "forest.js"), "utf8");
 }
